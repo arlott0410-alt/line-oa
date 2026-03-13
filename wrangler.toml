@@ -1,0 +1,14 @@
+name = "line-unified-inbox-worker"
+main = "workers/src/index.ts"
+compatibility_date = "2026-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Public vars (non-secret) can go here
+
+# Secrets: set via `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN` etc.
+# LINE_CHANNEL_ACCESS_TOKEN
+# LINE_CHANNEL_SECRET
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+# SUPABASE_SERVICE_ROLE_KEY (for Worker to bypass RLS when storing webhook data)
