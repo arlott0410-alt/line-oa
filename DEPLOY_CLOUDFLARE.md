@@ -1,5 +1,38 @@
 # คู่มือ Deploy บน Cloudflare และเชื่อมต่อ GitHub
 
+## วิธีที่ 1: Auto Deploy ผ่าน GitHub Actions (แนะนำ)
+
+เมื่อ push ขึ้น `main` จะ deploy อัตโนมัติ
+
+### ตั้งค่า GitHub Secrets ก่อน
+
+ไปที่ **Settings** → **Secrets and variables** → **Actions** → เพิ่ม:
+
+- `CLOUDFLARE_ACCOUNT_ID` — จาก Cloudflare Dashboard
+- `CLOUDFLARE_API_TOKEN` — สร้างที่ My Profile → API Tokens (สิทธิ์ Workers + Pages)
+- `NEXT_PUBLIC_SUPABASE_URL` — URL โปรเจกต์ Supabase
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Anon key
+- `NEXT_PUBLIC_WORKER_URL` — URL Worker (เช่น `https://line-unified-inbox-worker.xxx.workers.dev`) — ใส่หลัง deploy Worker ครั้งแรก
+
+### ตั้งค่า Worker Secrets (ครั้งเดียว)
+
+```powershell
+npx wrangler login
+npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+npx wrangler secret put LINE_CHANNEL_SECRET
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+```
+
+### สร้าง Pages Project ครั้งแรก
+
+ไปที่ Cloudflare Dashboard → Workers & Pages → Create → Pages → Direct Upload → ชื่อ `line-unified-inbox`
+
+---
+
+## วิธีที่ 2: Deploy ด้วยมือ
+
 ## ขั้นตอนที่ 1: Login เข้า Cloudflare
 
 เปิด Terminal/PowerShell แล้วรัน:
