@@ -32,7 +32,7 @@ export function EscalationDialog({
   currentAdminId,
   onEscalated,
 }: EscalationDialogProps) {
-  const [colleagues, setColleagues] = useState<{ id: string; email: string }[]>([]);
+  const [colleagues, setColleagues] = useState<{ id: string; email: string; display_name?: string | null }[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showOffline, setShowOffline] = useState(false);
@@ -105,7 +105,7 @@ export function EscalationDialog({
               <option value="">— เลือก —</option>
               {colleagues.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.email}
+                  {c.display_name ? `${c.display_name} (${c.email})` : c.email}
                 </option>
               ))}
             </select>

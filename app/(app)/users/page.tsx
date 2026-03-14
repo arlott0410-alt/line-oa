@@ -51,7 +51,9 @@ export default function UsersPage() {
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<string>("admin");
+  const [addDisplayName, setAddDisplayName] = useState("");
   const [editRole, setEditRole] = useState<string>("admin");
+  const [editDisplayName, setEditDisplayName] = useState("");
   const [editSkills, setEditSkills] = useState<string[]>([]);
   const [editStatus, setEditStatus] = useState<string>("offline");
   const [submitting, setSubmitting] = useState(false);
@@ -90,7 +92,8 @@ export default function UsersPage() {
   const filtered = users.filter(
     (u) =>
       u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.role.toLowerCase().includes(search.toLowerCase())
+      u.role.toLowerCase().includes(search.toLowerCase()) ||
+      (u.display_name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -98,12 +101,20 @@ export default function UsersPage() {
     if (!addEmail || !addPassword || !addRole) return;
     setSubmitting(true);
     try {
-      await createAdminUser(addEmail, addPassword, addRole);
+      const created = await createAdminUser(addEmail, addPassword, addRole);
+      const uid = created?.id;
+      if (uid && addDisplayName.trim()) {
+        await supabase.from("admin_profiles").upsert(
+          { user_id: uid, display_name: addDisplayName.trim(), updated_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
+      }
       toast.success("User created successfully");
       setAddOpen(false);
       setAddEmail("");
       setAddPassword("");
       setAddRole("admin");
+      setAddDisplayName("");
       fetchUsers();
     } catch (err) {
       toast.error((err as Error).message);
@@ -116,6 +127,10 @@ export default function UsersPage() {
     setSubmitting(true);
     try {
       await updateAdminUserRole(uid, editRole);
+      await supabase.from("admin_profiles").upsert(
+        { user_id: uid, display_name: editDisplayName.trim() || null, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
       if (["admin", "super_admin"].includes(editRole)) {
         await supabase.from("admin_status").upsert(
           { user_id: uid, status: editStatus, last_updated: new Date().toISOString() },
@@ -142,7 +157,10 @@ export default function UsersPage() {
   const loadEditData = async (uid: string) => {
     setEditOpen(uid);
     const u = users.find((x) => x.id === uid);
-    if (u) setEditRole(u.role);
+    if (u) {
+      setEditRole(u.role);
+      setEditDisplayName(u.display_name || "");
+    }
     if (u && ["admin", "super_admin"].includes(u.role)) {
       const { data: skills } = await supabase.from("admin_skills").select("skill").eq("user_id", uid);
       setEditSkills(skills?.map((s) => s.skill) || []);
@@ -208,6 +226,18 @@ export default function UsersPage() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="add-display-name">ชื่อที่แสดง</Label>
+                  <Input
+                    id="add-display-name"
+                    value={addDisplayName}
+                    onChange={(e) => setAddDisplayName(e.target.value)}
+                    placeholder="เช่น สมชาย, แมว"
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    ให้พนักงานรู้ว่าใครรับงานอยู่
+                  </p>
+                </div>
+                <div>
                   <Label htmlFor="add-password">Password</Label>
                   <Input
                     id="add-password"
@@ -253,8 +283,8 @@ export default function UsersPage() {
 
         <div className="mb-4 flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by email or role..."
+            <Input
+              placeholder="ค้นหาตาม email, ชื่อ หรือ role..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
@@ -284,7 +314,10 @@ export default function UsersPage() {
                   const m = metrics[u.id];
                   return (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.email}</TableCell>
+                    <TableCell className="font-medium">
+                      {u.display_name || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{u.email}</TableCell>
                     <TableCell>
                       <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
                         {u.role}
@@ -331,6 +364,18 @@ export default function UsersPage() {
                               <p className="text-sm text-muted-foreground">
                                 {u.email}
                               </p>
+                              <div>
+                                <Label>ชื่อที่แสดง</Label>
+                                <Input
+                                  value={editDisplayName}
+                                  onChange={(e) => setEditDisplayName(e.target.value)}
+                                  placeholder="เช่น สมชาย, แมว"
+                                  className="mt-1"
+                                />
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  ให้พนักงานรู้ว่าใครรับงานอยู่
+                                </p>
+                              </div>
                               <div>
                                 <Label>Role</Label>
                                 <select

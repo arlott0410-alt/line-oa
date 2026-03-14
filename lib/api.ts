@@ -108,6 +108,7 @@ export interface AdminUser {
   id: string;
   email: string;
   role: string;
+  display_name?: string | null;
   created_at?: string;
   last_sign_in_at?: string;
 }
@@ -119,7 +120,7 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
 }
 
 /** รายชื่อเพื่อน admin/super_admin สำหรับส่งแชท (admin+ ใช้ได้, ?online=1 = เฉพาะออนไลน์) */
-export async function fetchColleagues(onlineOnly = true): Promise<{ id: string; email: string }[]> {
+export async function fetchColleagues(onlineOnly = true): Promise<{ id: string; email: string; display_name?: string | null }[]> {
   const url = `${WORKER_URL}/admin/colleagues${onlineOnly ? "?online=1" : ""}`;
   const res = await fetchWithAuth(url);
   if (!res.ok) throw new Error("Failed to fetch colleagues");

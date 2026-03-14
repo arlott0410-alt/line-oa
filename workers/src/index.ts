@@ -1096,10 +1096,20 @@ app.get("/admin/colleagues", async (c) => {
   if (!authRes.ok) return c.json({ error: "Failed to list users" }, 500);
   const authData = await authRes.json();
   const users = authData.users || [];
+
+  const profilesRes = await fetch(
+    `${supabaseUrl}/rest/v1/admin_profiles?user_id=in.(${idsToFetch.map((id) => `"${id}"`).join(",")})&select=user_id,display_name`,
+    {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    }
+  );
+  const profilesList = profilesRes.ok ? await profilesRes.json() : [];
+  const profileMap = new Map(profilesList.map((p: { user_id: string; display_name: string | null }) => [p.user_id, p.display_name]));
+
   const result = idsToFetch
     .map((id: string) => {
       const u = users.find((x: { id: string }) => x.id === id);
-      return u ? { id: u.id, email: u.email || "" } : null;
+      return u ? { id: u.id, email: u.email || "", display_name: profileMap.get(id) || null } : null;
     })
     .filter(Boolean);
   return c.json(result);
@@ -1144,9 +1154,22 @@ app.get("/admin/users", async (c) => {
   const rolesList = rolesRes.ok ? await rolesRes.json() : [];
   const roleMap = new Map(rolesList.map((r: { user_id: string; role: string }) => [r.user_id, r.role]));
 
+  const profilesRes = await fetch(
+    `${supabaseUrl}/rest/v1/admin_profiles?select=user_id,display_name`,
+    {
+      headers: {
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`,
+      },
+    }
+  );
+  const profilesList = profilesRes.ok ? await profilesRes.json() : [];
+  const profileMap = new Map(profilesList.map((p: { user_id: string; display_name: string | null }) => [p.user_id, p.display_name]));
+
   const result = users.map((u: { id: string; email?: string; created_at?: string; last_sign_in_at?: string }) => ({
     id: u.id,
     email: u.email || "",
+    display_name: profileMap.get(u.id) || null,
     role: roleMap.get(u.id) || "viewer",
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at,
