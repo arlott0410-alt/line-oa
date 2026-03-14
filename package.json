@@ -10,6 +10,7 @@
     "lint": "next lint",
     "dev:workers": "wrangler dev",
     "deploy:workers": "wrangler deploy",
+    "setup:secrets": "powershell -ExecutionPolicy Bypass -File scripts/setup-worker-secrets.ps1",
     "deploy:pages": "npm run build && wrangler pages deploy out --project-name=line-unified-inbox"
   },
   "dependencies": {

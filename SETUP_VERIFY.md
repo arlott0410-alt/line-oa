@@ -17,6 +17,8 @@ supabase/migrations/20260313000001_add_channels.sql
 supabase/migrations/20260314000000_add_image_support.sql
 ```
 
+**ถ้า Error 500 บน user_roles:** รัน `supabase/quick_fix_user_roles.sql` ใน SQL Editor ก่อน
+
 หรือใช้คำสั่ง:
 ```bash
 supabase db push
@@ -42,11 +44,14 @@ Worker ต้องมี **3 ค่า** ครบ:
 
 | Name | วิธีตั้ง |
 |------|----------|
-| `SUPABASE_URL` | แก้ใน `wrangler.toml` แล้ว run `npx wrangler deploy` หรือใส่ใน Dashboard |
-| `SUPABASE_ANON_KEY` | Dashboard → Variables → Secret |
-| `SUPABASE_SERVICE_ROLE_KEY` | Dashboard → Variables → Secret |
+| `SUPABASE_URL` | อยู่ใน `wrangler.toml` แล้ว — deploy ไปอัตโนมัติ |
+| `SUPABASE_ANON_KEY` | `npm run setup:secrets` หรือ Dashboard → Variables → Secret |
+| `SUPABASE_SERVICE_ROLE_KEY` | `npm run setup:secrets` หรือ Dashboard → Variables → Secret |
 
-**Deploy Worker:** ถ้าแก้ wrangler.toml แล้ว ต้อง run `npx wrangler deploy` เพื่อให้ SUPABASE_URL ถูก deploy ไป (ไม่ใช้แค่ copy-paste โค้ด)
+**วิธีที่ไม่อ่านผิด (แนะนำ):**
+1. Regenerate keys ใน Supabase (Settings → API → Reset keys) — เพราะ keys เดิมถูกแชร์แล้ว
+2. รัน `npm run setup:secrets` แล้วใส่ ANON_KEY และ SERVICE_ROLE_KEY
+3. รัน `npm run deploy:workers` — จะ deploy พร้อม vars จาก wrangler.toml และ secrets ที่ตั้งไว้
 
 ---
 
