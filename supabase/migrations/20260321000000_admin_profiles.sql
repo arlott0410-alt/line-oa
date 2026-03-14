@@ -13,16 +13,7 @@ CREATE POLICY "Authenticated can read admin_profiles"
   ON admin_profiles FOR SELECT TO authenticated
   USING (true);
 
--- User can insert/update own display_name
-CREATE POLICY "User can insert own admin_profile"
-  ON admin_profiles FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "User can update own admin_profile"
-  ON admin_profiles FOR UPDATE TO authenticated
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
+-- เฉพาะ super_admin แก้ไขได้ (User Management)
 CREATE POLICY "Super admin can manage admin_profiles"
   ON admin_profiles FOR ALL TO authenticated
   USING (
