@@ -43,13 +43,19 @@
 
 ### ขั้นตอนที่ 1: Build Worker
 
+**วิธีที่ 1 – Copy-paste (ไม่มีบีบอัดรูป):**
 ```powershell
 cd c:\Users\ADMIN_JUN88\Desktop\line-oa
 npm install
 npm run build:worker
 ```
+จะได้ไฟล์ `dist/worker.js` — ใช้ copy ไปวางใน Dashboard ได้เลย
 
-จะได้ไฟล์ `dist/worker.js`
+**วิธีที่ 2 – Wrangler deploy (มีบีบอัดรูป):**
+```powershell
+npm run deploy:workers
+```
+ใช้ `wrangler deploy` จะได้ Worker ที่บีบอัดรูปอัตโนมัติ (resize + WebP) เพื่อโหลดเร็วขึ้น
 
 ### ขั้นตอนที่ 2: สร้าง Worker ใน Cloudflare Dashboard
 

@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Env } from "../env";
 import { cors } from "hono/cors";
+import { compressImage } from "./compress-photon";
 
 // Types
 interface LineWebhookEvent {
@@ -259,6 +260,24 @@ app.use(
   })
 );
 
+// GET /r2/* - Serve images from R2 (เมื่อ R2_PUBLIC_BASE_URL ไม่ได้ตั้งค่า)
+app.get("/r2/*", async (c) => {
+  const bucket = c.env.IMAGES_BUCKET as R2Bucket | undefined;
+  if (!bucket) return c.json({ error: "R2 not configured" }, 503);
+  const path = c.req.path.replace(/^\/r2\//, "");
+  if (!path) return c.notFound();
+  try {
+    const obj = await bucket.get(path);
+    if (!obj) return c.notFound();
+    const headers = new Headers();
+    obj.writeHttpMetadata(headers);
+    headers.set("Cache-Control", "public, max-age=86400");
+    return new Response(obj.body, { headers, status: 200 });
+  } catch {
+    return c.notFound();
+  }
+});
+
 // GET /webhook - LINE may use for URL verification; return 200
 app.get("/webhook", (c) => c.json({ ok: true }));
 
@@ -351,7 +370,7 @@ app.post("/webhook", async (c) => {
       content = event.message.text || "";
     } else if (event.message.type === "image") {
       content = "[Image]";
-      if (imagesBucket && r2PublicBase) {
+      if (imagesBucket) {
         try {
           const imgRes = await fetch(
             `https://api-data.line.me/v2/bot/message/${messageId}/content`,
@@ -360,19 +379,41 @@ app.post("/webhook", async (c) => {
           if (!imgRes.ok) throw new Error("Failed to fetch image");
 
           const arrayBuffer = await imgRes.arrayBuffer();
+          const inputBytes = new Uint8Array(arrayBuffer);
           const contentType = imgRes.headers.get("Content-Type") || "image/jpeg";
           mimeType = contentType.split(";")[0].trim();
-          const ext = mimeType === "image/png" ? "png" : mimeType === "image/gif" ? "gif" : "jpg";
+
+          const compressed = compressImage(inputBytes, mimeType);
+          let finalBytes: Uint8Array;
+          let finalContentType: string;
+          let ext: string;
+
+          if (compressed) {
+            finalBytes = compressed.bytes;
+            finalContentType = compressed.contentType;
+            ext = compressed.ext;
+          } else {
+            finalBytes = inputBytes;
+            finalContentType = mimeType;
+            ext = mimeType === "image/png" ? "png" : mimeType === "image/gif" ? "gif" : "jpg";
+          }
+
           const timestamp = Math.floor(Date.now() / 1000);
           const key = `${channelId}/${userId}/${timestamp}-${messageId}.${ext}`;
 
-          await imagesBucket.put(key, arrayBuffer, {
-            httpMetadata: { contentType: mimeType },
+          await imagesBucket.put(key, finalBytes, {
+            httpMetadata: { contentType: finalContentType },
           });
 
-          const baseUrl = r2PublicBase.replace(/\/$/, "");
-          imageOriginalUrl = `${baseUrl}/${key}`;
-          imagePreviewUrl = imageOriginalUrl;
+          if (r2PublicBase) {
+            const baseUrl = r2PublicBase.replace(/\/$/, "");
+            imageOriginalUrl = `${baseUrl}/${key}`;
+            imagePreviewUrl = imageOriginalUrl;
+          } else {
+            const workerOrigin = new URL(c.req.url).origin;
+            imageOriginalUrl = `${workerOrigin}/r2/${key}`;
+            imagePreviewUrl = imageOriginalUrl;
+          }
         } catch (err) {
           console.error("Image upload failed:", err);
         }

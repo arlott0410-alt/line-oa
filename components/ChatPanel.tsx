@@ -284,53 +284,58 @@ export function ChatPanel({
                 Loading older messages...
               </div>
             )}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.sender_type === "user" ? "justify-end" : "justify-start"}`}
-              >
+            {messages.map((msg) => {
+              const isCustomer = msg.sender_type === "user";
+              return (
                 <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
-                    msg.sender_type === "user"
-                      ? "rounded-br-md bg-[#06C755] text-white"
-                      : "rounded-bl-md bg-gray-100 text-gray-900"
-                  }`}
+                  key={msg.id}
+                  className={`flex ${isCustomer ? "justify-start" : "justify-end"}`}
                 >
-                  {msg.image_preview_url ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setImageModalUrl(msg.image_original_url || msg.image_preview_url || null)
-                      }
-                      className="block cursor-pointer"
-                    >
-                      <img
-                        src={msg.image_preview_url}
-                        alt="User image"
-                        className="max-w-xs max-h-64 rounded-lg object-contain hover:opacity-90 transition"
-                      />
-                    </button>
-                  ) : null}
-                  {msg.content && msg.content !== "[Image]" ? (
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                  ) : msg.content === "[Image]" && !msg.image_preview_url ? (
-                    <p className="text-sm opacity-80">[Image – failed to load]</p>
-                  ) : null}
-                  <p
-                    className={`mt-1 text-xs ${
-                      msg.sender_type === "user"
-                        ? "text-green-100/80"
-                        : "text-muted-foreground"
-                    }`}
+                  <div
+                    className={`flex max-w-[75%] gap-2 ${isCustomer ? "flex-row" : "flex-row-reverse"}`}
                   >
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                    <div
+                      className={`rounded-2xl px-4 py-2 shadow-sm ${
+                        isCustomer
+                          ? "rounded-bl-md bg-gray-100 text-gray-900"
+                          : "rounded-br-md bg-[#06C755] text-white"
+                      }`}
+                    >
+                      {msg.image_preview_url ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setImageModalUrl(msg.image_original_url || msg.image_preview_url || null)
+                          }
+                          className="block cursor-pointer"
+                        >
+                          <img
+                            src={msg.image_preview_url}
+                            alt="รูปภาพจากลูกค้า"
+                            className="max-w-xs max-h-64 rounded-lg object-contain hover:opacity-90 transition"
+                          />
+                        </button>
+                      ) : null}
+                      {msg.content && msg.content !== "[Image]" ? (
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      ) : msg.content === "[Image]" && !msg.image_preview_url ? (
+                        <p className="text-sm opacity-80">[รูปภาพ – กำลังโหลด]</p>
+                      ) : null}
+                      <p
+                        className={`mt-1 text-xs ${
+                          isCustomer ? "text-muted-foreground" : "text-green-100/80"
+                        }`}
+                      >
+                        {new Date(msg.timestamp).toLocaleTimeString("th-TH", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
