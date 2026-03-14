@@ -11,3 +11,11 @@ compatibility_flags = ["nodejs_compat"]
 # SUPABASE_URL
 # SUPABASE_ANON_KEY
 # SUPABASE_SERVICE_ROLE_KEY (for Worker to bypass RLS when storing webhook data)
+# R2_PUBLIC_BASE_URL (e.g. https://pub-xxx.r2.dev - for image URLs)
+
+# R2 bucket for user-sent images
+# Deploy via Dashboard: สร้าง bucket ใน R2 → Worker Settings → R2 bucket bindings → Add IMAGES_BUCKET
+# (wrangler.toml ใช้เป็น reference เท่านั้น เพราะ deploy ไม่ใช้ wrangler)
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "line-oa-images"

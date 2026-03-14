@@ -117,6 +117,30 @@ wrangler secret put SUPABASE_ANON_KEY
 wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
+### R2 Setup for Images
+
+To store user-sent images from Line OA:
+
+1. **Create R2 bucket** in Cloudflare Dashboard → R2 → Create bucket → name it `line-oa-images` (or match `bucket_name` in `wrangler.toml`).
+
+2. **Enable public access** on the bucket:
+   - R2 → Your bucket → Settings → Public access → Allow Access
+   - Copy the public URL (e.g. `https://pub-xxxxx.r2.dev`)
+
+3. **Bind bucket to Worker** – either:
+   - **Via wrangler.toml** (already configured): `[[r2_buckets]]` with `binding = "IMAGES_BUCKET"` and `bucket_name = "line-oa-images"`
+   - **Via Dashboard**: Workers & Pages → Your Worker → Settings → Variables → R2 bucket bindings → Add binding `IMAGES_BUCKET`
+
+4. **Set public base URL**:
+   ```bash
+   wrangler secret put R2_PUBLIC_BASE_URL
+   ```
+   Enter the public URL from step 2 (e.g. `https://pub-xxxxx.r2.dev`).
+
+5. Run `supabase db push` to apply the image columns migration, then redeploy the Worker.
+
+For local dev, add `R2_PUBLIC_BASE_URL` to `.dev.vars` so image uploads work when testing with ngrok.
+
 ---
 
 ## 4. Local Development

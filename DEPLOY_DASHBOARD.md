@@ -61,8 +61,11 @@ npm run build:worker
 | `SUPABASE_URL` | URL โปรเจกต์ Supabase (เช่น https://xxx.supabase.co) |
 | `SUPABASE_ANON_KEY` | Anon key จาก Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key จาก Supabase |
+| `R2_PUBLIC_BASE_URL` | (Optional) Public URL ของ R2 bucket สำหรับรูปภาพ เช่น `https://pub-xxx.r2.dev` |
 
 **หมายเหตุ:** Credentials ของ Line OA เก็บใน DB (channels table) ไม่ต้องใส่ใน Worker
+
+**รูปภาพ (R2):** ถ้าต้องการเก็บรูปที่ user ส่งมา ต้องสร้าง R2 bucket → Settings → R2 bucket bindings → Add `IMAGES_BUCKET` → ใส่ `R2_PUBLIC_BASE_URL` เป็น Secret (ดู README ส่วน "R2 Setup for Images")
 
 ### ขั้นตอนที่ 5: ตั้งค่า Compatibility
 

@@ -12,7 +12,12 @@ interface LineWebhookEvent {
   type: string;
   replyToken?: string;
   source: { userId?: string; type: string };
-  message?: { type: string; id: string; text?: string };
+  message?: {
+    type: string;
+    id: string;
+    text?: string;
+    contentProvider?: { type?: string; originalContentUrl?: string; previewImageUrl?: string; mimeType?: string };
+  };
   timestamp: number;
 }
 
@@ -135,13 +140,14 @@ app.post("/webhook", async (c) => {
   }
 
   const channelId = channel.id;
+  const imagesBucket = c.env.IMAGES_BUCKET;
+  const r2PublicBase = c.env.R2_PUBLIC_BASE_URL as string | undefined;
 
   for (const event of body.events) {
-    if (event.type !== "message" || event.message?.type !== "text") continue;
+    if (event.type !== "message" || !event.message) continue;
     const userId = event.source?.userId;
     if (!userId) continue;
 
-    const content = event.message.text || "";
     const messageId = event.message.id;
     const now = new Date().toISOString();
 
@@ -186,7 +192,57 @@ app.post("/webhook", async (c) => {
       });
     }
 
+    let content: string;
+    let imageOriginalUrl: string | null = null;
+    let imagePreviewUrl: string | null = null;
+    let mimeType: string | null = null;
+
+    if (event.message.type === "text") {
+      content = event.message.text || "";
+    } else if (event.message.type === "image") {
+      content = "[Image]";
+      if (imagesBucket && r2PublicBase) {
+        try {
+          const imgRes = await fetch(
+            `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+            { headers: { Authorization: `Bearer ${channel.access_token}` } }
+          );
+          if (!imgRes.ok) throw new Error("Failed to fetch image");
+
+          const arrayBuffer = await imgRes.arrayBuffer();
+          const contentType = imgRes.headers.get("Content-Type") || "image/jpeg";
+          mimeType = contentType.split(";")[0].trim();
+          const ext = mimeType === "image/png" ? "png" : mimeType === "image/gif" ? "gif" : "jpg";
+          const timestamp = Math.floor(Date.now() / 1000);
+          const key = `${channelId}/${userId}/${timestamp}-${messageId}.${ext}`;
+
+          await imagesBucket.put(key, arrayBuffer, {
+            httpMetadata: { contentType: mimeType },
+          });
+
+          const baseUrl = r2PublicBase.replace(/\/$/, "");
+          imageOriginalUrl = `${baseUrl}/${key}`;
+          imagePreviewUrl = imageOriginalUrl;
+        } catch (err) {
+          console.error("Image upload failed:", err);
+        }
+      }
+    } else {
+      continue;
+    }
+
     // Insert message
+    const messageBody: Record<string, unknown> = {
+      channel_id: channelId,
+      line_user_id: userId,
+      sender_type: "user",
+      content,
+      message_id: messageId,
+    };
+    if (imageOriginalUrl) messageBody.image_original_url = imageOriginalUrl;
+    if (imagePreviewUrl) messageBody.image_preview_url = imagePreviewUrl;
+    if (mimeType) messageBody.mime_type = mimeType;
+
     await fetch(`${supabaseUrl}/rest/v1/messages`, {
       method: "POST",
       headers: {
@@ -195,13 +251,7 @@ app.post("/webhook", async (c) => {
         Authorization: `Bearer ${supabaseServiceKey}`,
         Prefer: "return=minimal",
       },
-      body: JSON.stringify({
-        channel_id: channelId,
-        line_user_id: userId,
-        sender_type: "user",
-        content,
-        message_id: messageId,
-      }),
+      body: JSON.stringify(messageBody),
     });
   }
 
@@ -316,7 +366,7 @@ app.get("/messages/:userId", async (c) => {
   if (authError) return c.json({ error: "Invalid token" }, 401);
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/messages?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id`,
+    `${supabaseUrl}/rest/v1/messages?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type`,
     {
       headers: {
         apikey: supabaseAnonKey,

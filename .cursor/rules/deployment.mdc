@@ -1,0 +1,14 @@
+---
+description: Deployment method - no wrangler CLI, use GitHub + Cloudflare Dashboard
+alwaysApply: true
+---
+
+# Deployment: GitHub + Cloudflare Dashboard
+
+**ระบบนี้ไม่ใช้ wrangler CLI ในการ deploy**
+
+- **Worker**: Push code → build (`npm run build:worker`) → copy `dist/worker.js` ไปวางใน Cloudflare Dashboard → Edit code
+- **Frontend (Pages)**: Push to GitHub → Cloudflare Pages เชื่อม Git → auto deploy
+- **R2, Secrets, Variables**: ตั้งค่าทั้งหมดใน Cloudflare Dashboard เอง (ไม่ใช้ wrangler secret / wrangler.toml bindings)
+
+เมื่อแนะนำขั้นตอน deploy ให้อ้างอิง DEPLOY_DASHBOARD.md และบอกให้ตั้งค่าใน Dashboard ไม่ใช่ใช้ wrangler commands

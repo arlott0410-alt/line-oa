@@ -14,6 +14,9 @@ interface Message {
   content: string;
   timestamp: string;
   channel_id?: string;
+  image_original_url?: string | null;
+  image_preview_url?: string | null;
+  mime_type?: string | null;
 }
 
 interface ChatPanelProps {
@@ -164,7 +167,25 @@ export function ChatPanel({
                       : "rounded-bl-md bg-slate-700 text-slate-100"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  {msg.image_preview_url ? (
+                    <a
+                      href={msg.image_original_url || msg.image_preview_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <img
+                        src={msg.image_preview_url}
+                        alt="User image"
+                        className="max-w-xs max-h-64 rounded object-contain"
+                      />
+                    </a>
+                  ) : null}
+                  {msg.content && msg.content !== "[Image]" ? (
+                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  ) : msg.content === "[Image]" && !msg.image_preview_url ? (
+                    <p className="text-sm opacity-80">[Image – failed to load]</p>
+                  ) : null}
                   <p
                     className={`mt-1 text-xs ${
                       msg.sender_type === "user"
