@@ -84,6 +84,113 @@ async function getChannelByBotUserId(
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
+// Auto-tag based on message content (simple regex)
+function autoTagFromContent(content: string): string[] {
+  const lower = content.toLowerCase();
+  const tags: string[] = [];
+  if (/\b(ฝาก|deposit)\b/.test(lower)) tags.push("deposit");
+  else if (/\b(ถอน|withdrawal)\b/.test(lower)) tags.push("withdrawal");
+  else tags.push("general");
+  return tags;
+}
+
+// Round-robin assign: pick available admin (role=admin/super_admin, status=available or unset)
+// Prefer skills match; order by last_assign_time ASC
+async function assignChatToAdmin(
+  baseUrl: string,
+  serviceKey: string,
+  lineUserId: string,
+  channelId: string,
+  tags: string[]
+): Promise<void> {
+  // Get admin/super_admin user_ids
+  const rolesRes = await fetch(
+    `${baseUrl}/rest/v1/user_roles?role=in.(admin,super_admin)&select=user_id`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    }
+  );
+  if (!rolesRes.ok) return;
+  const roles = await rolesRes.json();
+  const adminUserIds = Array.isArray(roles) ? roles.map((r: { user_id: string }) => r.user_id) : [];
+  if (adminUserIds.length === 0) return;
+
+  // Get admin_status: available or not present (treat as available)
+  const statusRes = await fetch(
+    `${baseUrl}/rest/v1/admin_status?user_id=in.(${adminUserIds.join(",")})&select=user_id,last_assign_time,status`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    }
+  );
+  const statusList = statusRes.ok ? await statusRes.json() : [];
+  const availableIds = adminUserIds.filter((id) => {
+    const s = (statusList as { user_id: string; status?: string }[]).find((x) => x.user_id === id);
+    return !s || s.status === "available";
+  });
+  if (availableIds.length === 0) return;
+
+  // Get skills
+  const skillsRes = await fetch(
+    `${baseUrl}/rest/v1/admin_skills?user_id=in.(${availableIds.join(",")})&select=user_id,skill`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    }
+  );
+  const skillsList = skillsRes.ok ? await skillsRes.json() : [];
+  const skillsMap = new Map<string, string[]>();
+  for (const s of skillsList as { user_id: string; skill: string }[]) {
+    if (!skillsMap.has(s.user_id)) skillsMap.set(s.user_id, []);
+    skillsMap.get(s.user_id)!.push(s.skill);
+  }
+
+  const tag = tags[0] || "general";
+  const withSkill = availableIds.filter((id) => {
+    const s = skillsMap.get(id) || [];
+    return s.includes(tag) || s.includes("general");
+  });
+  const candidates = withSkill.length > 0 ? withSkill : availableIds;
+
+  // Round-robin by last_assign_time
+  const withTime = candidates.map((id) => {
+    const a = (statusList as { user_id: string; last_assign_time?: string }[]).find((x) => x.user_id === id);
+    return { id, last: a?.last_assign_time || null };
+  });
+  withTime.sort((a, b) => {
+    if (!a.last) return -1;
+    if (!b.last) return 1;
+    return new Date(a.last).getTime() - new Date(b.last).getTime();
+  });
+  const assignTo = withTime[0]?.id;
+  if (!assignTo) return;
+
+  const now = new Date().toISOString();
+  await fetch(
+    `${baseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(lineUserId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        assigned_admin_id: assignTo,
+        queue_status: "assigned",
+        tags,
+      }),
+    }
+  );
+  await fetch(`${baseUrl}/rest/v1/admin_status?user_id=eq.${assignTo}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({ last_assign_time: now, last_updated: now }),
+  });
+}
+
 // ตรวจสอบ super_admin โดยใช้ service_role (bypass RLS) — ทำงานได้แน่นอน
 async function requireSuperAdmin(
   supabaseUrl: string,
@@ -186,47 +293,7 @@ app.post("/webhook", async (c) => {
     const messageId = event.message.id;
     const now = new Date().toISOString();
 
-    // Upsert line_user: PATCH if exists, else INSERT
-    const checkRes = await fetch(
-      `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&select=id`,
-      {
-        headers: {
-          apikey: supabaseServiceKey,
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-      }
-    );
-    const existing = await checkRes.json();
-    if (Array.isArray(existing) && existing.length > 0) {
-      await fetch(
-        `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: supabaseServiceKey,
-            Authorization: `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({ last_active: now }),
-        }
-      );
-    } else {
-      await fetch(`${supabaseUrl}/rest/v1/line_users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseServiceKey,
-          Authorization: `Bearer ${supabaseServiceKey}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify({
-          channel_id: channelId,
-          line_user_id: userId,
-          last_active: now,
-        }),
-      });
-    }
-
+    // Get content early for auto-tag (text only)
     let content: string;
     let imageOriginalUrl: string | null = null;
     let imagePreviewUrl: string | null = null;
@@ -264,6 +331,53 @@ app.post("/webhook", async (c) => {
       }
     } else {
       continue;
+    }
+
+    // Upsert line_user: PATCH if exists, else INSERT (with auto-tag + assign for new)
+    const checkRes = await fetch(
+      `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&select=id,queue_status`,
+      {
+        headers: {
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+        },
+      }
+    );
+    const existing = await checkRes.json();
+    const isNewChat = !Array.isArray(existing) || existing.length === 0;
+
+    if (isNewChat) {
+      const tags = autoTagFromContent(content);
+      await fetch(`${supabaseUrl}/rest/v1/line_users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          channel_id: channelId,
+          line_user_id: userId,
+          last_active: now,
+          tags,
+          queue_status: "unassigned",
+        }),
+      });
+      await assignChatToAdmin(supabaseUrl, supabaseServiceKey, userId, channelId, tags);
+    } else {
+      await fetch(
+        `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: supabaseServiceKey,
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ last_active: now }),
+        }
+      );
     }
 
     // Insert message
@@ -339,9 +453,10 @@ app.get("/channels", async (c) => {
   return c.json(data);
 });
 
-// GET /chats?channel_id=xxx
+// GET /chats?channel_id=xxx&assigned_to=me
 app.get("/chats", async (c) => {
   const channelId = c.req.query("channel_id");
+  const assignedToMe = c.req.query("assigned_to") === "me";
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -354,14 +469,18 @@ app.get("/chats", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  const { error: authError } = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}` },
-  }).then((r) => r.json());
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+  });
+  const userData = await userRes.json();
+  const userId = userData.user?.id ?? userData.id;
+  if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
 
-  if (authError) return c.json({ error: "Invalid token" }, 401);
+  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id`;
+  if (assignedToMe) url += `&assigned_admin_id=eq.${userId}`;
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id`,
+    url,
     {
       headers: {
         apikey: supabaseAnonKey,
@@ -371,7 +490,7 @@ app.get("/chats", async (c) => {
   );
 
   if (!res.ok) return c.json({ error: "Failed to fetch chats" }, 500);
-  const users = await res.json();
+  let users = await res.json();
 
   const usersWithLastMessage = await Promise.all(
     users.map(async (u: { line_user_id: string }) => {
@@ -390,6 +509,70 @@ app.get("/chats", async (c) => {
   );
 
   return c.json(usersWithLastMessage);
+});
+
+// GET /queue - Unassigned chats (admin+ only)
+app.get("/queue", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+
+  const token = authHeader.slice(7);
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+  });
+  const userData = await userRes.json();
+  const userId = userData.user?.id ?? userData.id;
+  if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
+
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+    }
+  );
+  const roles = await rolesRes.json();
+  const role = Array.isArray(roles) && roles.length > 0 ? roles[0]?.role : null;
+  if (!["super_admin", "admin"].includes(role)) return c.json({ error: "Admin required" }, 403);
+
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.unassigned&select=id,line_user_id,profile_name,channel_id,last_active,tags&order=last_active.desc`,
+    {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!res.ok) return c.json({ error: "Failed to fetch queue" }, 500);
+  const items = await res.json();
+
+  const channelsRes = await fetch(
+    `${supabaseUrl}/rest/v1/channels?select=id,name`,
+    {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+    }
+  );
+  const channels = channelsRes.ok ? await channelsRes.json() : [];
+  const channelMap = new Map((channels as { id: string; name: string }[]).map((ch) => [ch.id, ch.name]));
+
+  const withChannelAndMessage = await Promise.all(
+    (items as { id: string; line_user_id: string; channel_id: string }[]).map(async (u) => {
+      const msgRes = await fetch(
+        `${supabaseUrl}/rest/v1/messages?channel_id=eq.${u.channel_id}&line_user_id=eq.${encodeURIComponent(u.line_user_id)}&order=timestamp.desc&limit=1&select=content,timestamp`,
+        {
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+        }
+      );
+      const msgs = msgRes.ok ? await msgRes.json() : [];
+      return {
+        ...u,
+        channel_name: channelMap.get(u.channel_id) || "—",
+        last_message: msgs[0] || null,
+      };
+    })
+  );
+
+  return c.json(withChannelAndMessage);
 });
 
 // GET /messages/:userId?channel_id=xxx&limit=50&offset=0

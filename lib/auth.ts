@@ -13,8 +13,8 @@ export type UserRole = "super_admin" | "admin" | "viewer";
 
 /** หน้าไหนให้ role ไหนเข้าได้ */
 export const ROLE_PAGE_ACCESS: Record<UserRole, string[]> = {
-  super_admin: ["/dashboard", "/users", "/settings"],
-  admin: ["/dashboard"],
+  super_admin: ["/dashboard", "/queue", "/users", "/settings"],
+  admin: ["/dashboard", "/queue"],
   viewer: ["/dashboard"],
 };
 

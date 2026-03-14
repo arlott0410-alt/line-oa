@@ -33,6 +33,8 @@ import {
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 
 const ROLES = ["super_admin", "admin", "viewer"] as const;
+const SKILLS = ["deposit", "withdrawal", "general"] as const;
+const STATUSES = ["available", "busy", "offline"] as const;
 
 export default function UsersPage() {
   const router = useRouter();
@@ -47,6 +49,8 @@ export default function UsersPage() {
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<string>("admin");
   const [editRole, setEditRole] = useState<string>("admin");
+  const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [editStatus, setEditStatus] = useState<string>("offline");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -109,13 +113,41 @@ export default function UsersPage() {
     setSubmitting(true);
     try {
       await updateAdminUserRole(uid, editRole);
-      toast.success("Role updated");
+      if (["admin", "super_admin"].includes(editRole)) {
+        await supabase.from("admin_status").upsert(
+          { user_id: uid, status: editStatus, last_updated: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
+        const { data: existing } = await supabase.from("admin_skills").select("id").eq("user_id", uid);
+        if (existing) await supabase.from("admin_skills").delete().eq("user_id", uid);
+        if (editSkills.length > 0) {
+          await supabase.from("admin_skills").insert(
+            editSkills.map((skill) => ({ user_id: uid, skill }))
+          );
+        }
+      }
+      toast.success("User updated");
       setEditOpen(null);
       fetchUsers();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const loadEditData = async (uid: string) => {
+    setEditOpen(uid);
+    const u = users.find((x) => x.id === uid);
+    if (u) setEditRole(u.role);
+    if (u && ["admin", "super_admin"].includes(u.role)) {
+      const { data: skills } = await supabase.from("admin_skills").select("skill").eq("user_id", uid);
+      setEditSkills(skills?.map((s) => s.skill) || []);
+      const { data: status } = await supabase.from("admin_status").select("status").eq("user_id", uid).single();
+      setEditStatus(status?.status || "offline");
+    } else {
+      setEditSkills([]);
+      setEditStatus("offline");
     }
   };
 
@@ -272,10 +304,7 @@ export default function UsersPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => {
-                              setEditRole(u.role);
-                              setEditOpen(u.id);
-                            }}
+                            onClick={() => loadEditData(u.id)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -291,7 +320,13 @@ export default function UsersPage() {
                                 <Label>Role</Label>
                                 <select
                                   value={editRole}
-                                  onChange={(e) => setEditRole(e.target.value)}
+                                  onChange={(e) => {
+                                    setEditRole(e.target.value);
+                                    if (!["admin", "super_admin"].includes(e.target.value)) {
+                                      setEditSkills([]);
+                                      setEditStatus("offline");
+                                    }
+                                  }}
                                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                                 >
                                   {ROLES.map((r) => (
@@ -301,6 +336,43 @@ export default function UsersPage() {
                                   ))}
                                 </select>
                               </div>
+                              {["admin", "super_admin"].includes(editRole) && (
+                                <>
+                                  <div>
+                                    <Label>Status (for queue assignment)</Label>
+                                    <select
+                                      value={editStatus}
+                                      onChange={(e) => setEditStatus(e.target.value)}
+                                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                                    >
+                                      {STATUSES.map((s) => (
+                                        <option key={s} value={s}>
+                                          {s}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <Label>Skills (for skill-based routing)</Label>
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                      {SKILLS.map((s) => (
+                                        <label key={s} className="flex items-center gap-1 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={editSkills.includes(s)}
+                                            onChange={(e) =>
+                                              setEditSkills((prev) =>
+                                                e.target.checked ? [...prev, s] : prev.filter((x) => x !== s)
+                                              )
+                                            }
+                                          />
+                                          {s}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
                             <DialogFooter>
                               <Button

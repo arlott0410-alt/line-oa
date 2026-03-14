@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { isAdminOrAbove } from "@/lib/auth";
 
 export interface ChatUser {
   id: string;
@@ -35,6 +36,8 @@ export default function DashboardPage() {
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
+  const [showMyChatsOnly, setShowMyChatsOnly] = useState(false);
+  const [canClaim, setCanClaim] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -43,6 +46,7 @@ export default function DashboardPage() {
         return;
       }
       setSession(session);
+      isAdminOrAbove().then(setCanClaim);
     });
   }, [router]);
 
@@ -95,6 +99,9 @@ export default function DashboardPage() {
           onSelectUser={setSelectedUserId}
           token={session.access_token}
           channelError={channelError}
+          showMyChatsOnly={showMyChatsOnly}
+          onMyChatsToggle={setShowMyChatsOnly}
+          canClaim={canClaim}
         />
         <ChatPanel
           selectedUserId={selectedUserId}

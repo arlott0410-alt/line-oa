@@ -14,6 +14,9 @@ interface SidebarProps {
   onSelectUser: (userId: string | null) => void;
   token: string;
   channelError?: string | null;
+  showMyChatsOnly?: boolean;
+  onMyChatsToggle?: (value: boolean) => void;
+  canClaim?: boolean;
 }
 
 export function Sidebar({
@@ -24,6 +27,9 @@ export function Sidebar({
   onSelectUser,
   token,
   channelError,
+  showMyChatsOnly = false,
+  onMyChatsToggle,
+  canClaim = false,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,10 +42,9 @@ export function Sidebar({
       return;
     }
     try {
-      const res = await fetch(
-        `${WORKER_URL}/chats?channel_id=${encodeURIComponent(selectedChannelId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(selectedChannelId)}`;
+      if (showMyChatsOnly) url += "&assigned_to=me";
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setChats(data);
@@ -55,7 +60,7 @@ export function Sidebar({
     fetchChats();
     const interval = setInterval(fetchChats, 15000);
     return () => clearInterval(interval);
-  }, [selectedChannelId, token]);
+  }, [selectedChannelId, token, showMyChatsOnly]);
 
   useEffect(() => {
     if (!selectedChannelId) return;
@@ -75,7 +80,7 @@ export function Sidebar({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedChannelId, token]);
+  }, [selectedChannelId, token, showMyChatsOnly]);
 
   return (
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">
@@ -96,6 +101,24 @@ export function Sidebar({
               </option>
             ))}
           </select>
+        )}
+        {onMyChatsToggle && canClaim && (
+          <div className="mt-2 flex gap-1">
+            <button
+              type="button"
+              onClick={() => onMyChatsToggle(false)}
+              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${!showMyChatsOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => onMyChatsToggle(true)}
+              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showMyChatsOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
+            >
+              My Chats
+            </button>
+          </div>
         )}
       </div>
 
@@ -122,7 +145,7 @@ export function Sidebar({
           <div className="p-4 text-center text-red-600">{error}</div>
         ) : chats.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            No conversations yet. Messages from Line will appear here.
+            {showMyChatsOnly ? "No chats assigned to you." : "No conversations yet. Messages from Line will appear here."}
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">

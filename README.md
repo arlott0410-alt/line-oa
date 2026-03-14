@@ -282,13 +282,18 @@ Once logged in as **super_admin**, go to **Users** in the sidebar to:
 
 ---
 
+## Chat Queue & Assignment
+
+When a new chat arrives via Line webhook, the system auto-tags (ฝาก/deposit, ถอน/withdrawal, general) and assigns to available admins (round-robin + skill match). Admins set **status** (available/busy/offline) and **skills** in Users → Edit. **Queue** page (`/queue`): claim unassigned chats. Dashboard: "My Chats" filter.
+
 ## API Reference (Worker)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/webhook` | POST | Line webhook (routes by `destination` = bot_user_id, credentials from DB) |
 | `/channels` | GET | List channels (auth) |
-| `/chats?channel_id=xxx` | GET | List users + last message (auth) |
+| `/chats?channel_id=xxx&assigned_to=me` | GET | List users + last message (auth) |
+| `/queue` | GET | Unassigned chats (admin+) |
 | `/messages/:userId?channel_id=xxx` | GET | Chat history (auth) |
 | `/reply` | POST | Send reply (body: `{ channel_id, line_user_id, content }`, auth, admin+) |
 

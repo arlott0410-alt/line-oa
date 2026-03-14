@@ -6,11 +6,12 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getUserRole, type UserRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Settings, LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, PanelLeftClose, PanelLeft, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ALL_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "admin", "viewer"] as UserRole[] },
+  { href: "/queue", label: "Queue", icon: Inbox, roles: ["super_admin", "admin"] as UserRole[] },
   { href: "/users", label: "Users", icon: Users, roles: ["super_admin"] as UserRole[] },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"] as UserRole[] },
 ];
