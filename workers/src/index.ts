@@ -6,7 +6,6 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { cors } from "hono/cors";
-import { Client } from "@line/bot-sdk";
 
 // Types
 interface LineWebhookEvent {
@@ -378,15 +377,20 @@ app.post("/reply", async (c) => {
     return c.json({ error: "Channel not found or missing credentials" }, 400);
   }
 
-  const client = new Client({
-    channelAccessToken: channel.access_token,
-    channelSecret: channel.secret || "",
+  const lineRes = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channel.access_token}`,
+    },
+    body: JSON.stringify({
+      to: line_user_id,
+      messages: [{ type: "text", text: content }],
+    }),
   });
-
-  try {
-    await client.pushMessage(line_user_id, { type: "text", text: content });
-  } catch (err) {
-    console.error("Line API error:", err);
+  if (!lineRes.ok) {
+    const errText = await lineRes.text();
+    console.error("Line API error:", errText);
     return c.json({ error: "Failed to send message" }, 500);
   }
 

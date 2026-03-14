@@ -160,15 +160,15 @@ Frontend runs at `http://localhost:3000`. Set `NEXT_PUBLIC_WORKER_URL=http://loc
 
 ## 5. Deployment
 
-### Deploy Worker
+### วิธีที่ 1: Deploy ผ่าน Dashboard (ไม่ใช้ Wrangler)
 
-```bash
-npm run deploy:workers
-```
+ดูคู่มือ **[DEPLOY_DASHBOARD.md](./DEPLOY_DASHBOARD.md)** สำหรับขั้นตอนแบบไม่ใช้ wrangler CLI
 
-Note the Worker URL (e.g. `https://line-unified-inbox-worker.xxxx.workers.dev`). Update Line webhook URL to `https://YOUR-WORKER-URL/webhook`.
+### วิธีที่ 2: Deploy ด้วย Wrangler
 
-### Deploy Frontend (Cloudflare Pages)
+**Worker:** `npm run deploy:workers`
+
+**Frontend (Cloudflare Pages):**
 
 ```bash
 npm run build
