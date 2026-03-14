@@ -12,3 +12,5 @@ alwaysApply: true
 - **R2, Secrets, Variables**: ตั้งค่าทั้งหมดใน Cloudflare Dashboard เอง (ไม่ใช้ wrangler secret / wrangler.toml bindings)
 
 เมื่อแนะนำขั้นตอน deploy ให้อ้างอิง DEPLOY_DASHBOARD.md และบอกให้ตั้งค่าใน Dashboard ไม่ใช่ใช้ wrangler commands
+
+**หลังแก้โค้ดเสร็จทุกครั้ง:** ให้ push ขึ้น GitHub main ให้ผู้ใช้เลย (`git add .` → `git commit -m "..."` → `git push origin main`)
