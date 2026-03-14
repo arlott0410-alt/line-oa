@@ -150,7 +150,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-full bg-background p-6">
+    <div className="min-h-full p-6">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Channel Settings</h1>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
             />
           </div>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <Button onClick={() => setAddOpen(true)}>
+            <Button onClick={() => setAddOpen(true)} className="bg-[#06C755] hover:bg-[#05b04a]">
               <Plus className="mr-2 h-4 w-4" />
               Add Channel
             </Button>
@@ -191,7 +191,7 @@ export default function SettingsPage() {
           </Dialog>
         </div>
 
-        <div className="rounded-lg border">
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           {loading ? (
             <div className="flex justify-center py-12 text-muted-foreground">
               Loading...

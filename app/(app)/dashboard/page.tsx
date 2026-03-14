@@ -86,7 +86,7 @@ export default function DashboardPage() {
         open={showOnboarding}
         onOpenChange={setShowOnboarding}
       />
-      <div className="flex h-full overflow-hidden bg-background">
+      <div className="flex h-full overflow-hidden">
         <Sidebar
           selectedUserId={selectedUserId}
           selectedChannelId={selectedChannelId}

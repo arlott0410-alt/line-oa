@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("dark font-sans", inter.variable)}>
+    <html lang="en" className={cn("font-sans", inter.variable)}>
       <body className="font-sans antialiased min-h-screen bg-background text-foreground">
         {children}
         <Toaster />

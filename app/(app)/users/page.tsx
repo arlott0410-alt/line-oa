@@ -139,7 +139,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="min-h-full bg-background p-6">
+    <div className="min-h-full p-6">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -149,7 +149,7 @@ export default function UsersPage() {
             </p>
           </div>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <Button onClick={() => setAddOpen(true)}>
+            <Button onClick={() => setAddOpen(true)} className="bg-[#06C755] hover:bg-[#05b04a]">
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
@@ -223,7 +223,7 @@ export default function UsersPage() {
           />
         </div>
 
-        <div className="rounded-lg border">
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           {loading ? (
             <div className="flex justify-center py-12 text-muted-foreground">
               Loading...

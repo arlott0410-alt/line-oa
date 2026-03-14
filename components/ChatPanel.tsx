@@ -164,7 +164,7 @@ export function ChatPanel({
 
   if (!selectedChannelId) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center bg-background text-muted-foreground">
+      <main className="flex flex-1 flex-col items-center justify-center bg-gray-50 text-gray-500">
         <p>Select a channel from the dropdown</p>
       </main>
     );
@@ -172,14 +172,14 @@ export function ChatPanel({
 
   if (!selectedUserId) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center bg-background text-muted-foreground">
+      <main className="flex flex-1 flex-col items-center justify-center bg-gray-50 text-gray-500">
         <p>Select a conversation from the sidebar</p>
       </main>
     );
   }
 
   return (
-    <main className="flex flex-1 flex-col bg-background">
+    <main className="flex flex-1 flex-col bg-white">
       <Dialog open={!!imageModalUrl} onOpenChange={() => setImageModalUrl(null)}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden">
           {imageModalUrl && (
@@ -192,8 +192,8 @@ export function ChatPanel({
         </DialogContent>
       </Dialog>
 
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="font-medium">
+      <div className="border-b border-gray-200 bg-white px-4 py-3">
+        <h3 className="font-medium text-gray-900">
           User {selectedUserId.slice(-8)}
         </h3>
       </div>
@@ -221,7 +221,7 @@ export function ChatPanel({
                   className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
                     msg.sender_type === "user"
                       ? "rounded-br-md bg-[#06C755] text-white"
-                      : "rounded-bl-md bg-muted text-foreground"
+                      : "rounded-bl-md bg-gray-100 text-gray-900"
                   }`}
                 >
                   {msg.image_preview_url ? (
@@ -271,7 +271,7 @@ export function ChatPanel({
       )}
 
       {!canReply && (
-        <div className="border-t border-border bg-amber-500/10 px-4 py-2 text-sm text-amber-600 dark:text-amber-400">
+        <div className="border-t border-gray-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
           Viewer role: You cannot send messages.
         </div>
       )}

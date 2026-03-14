@@ -22,13 +22,13 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-border bg-card transition-all duration-200",
+        "flex flex-col border-r border-border bg-white shadow-sm transition-all duration-200",
         collapsed ? "w-16" : "w-56"
       )}
     >
       <div className="flex h-14 items-center justify-between border-b border-border px-3">
         {!collapsed && (
-          <Link href="/dashboard" className="font-semibold">
+          <Link href="/dashboard" className="font-semibold text-gray-800">
             LineUnifiedInbox
           </Link>
         )}
@@ -51,13 +51,16 @@ export function AppSidebar() {
           return (
             <Link key={item.href} href={item.href}>
               <Button
-                variant={isActive ? "secondary" : "ghost"}
+                variant="ghost"
                 className={cn(
-                  "w-full justify-start",
-                  collapsed && "justify-center px-0"
+                  "w-full justify-start font-medium transition-colors",
+                  collapsed && "justify-center px-0",
+                  isActive
+                    ? "bg-[#06C755] text-white hover:bg-[#05b04a] hover:text-white"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 )}
               >
-                <Icon className={cn("h-4 w-4", !collapsed && "mr-2")} />
+                <Icon className={cn("h-4 w-4 shrink-0", !collapsed && "mr-2")} />
                 {!collapsed && item.label}
               </Button>
             </Link>
@@ -67,7 +70,7 @@ export function AppSidebar() {
       <div className="border-t border-border p-2">
         <Button
           variant="ghost"
-          className={cn("w-full justify-start text-muted-foreground", collapsed && "justify-center px-0")}
+          className={cn("w-full justify-start text-gray-600 hover:bg-gray-100 hover:text-gray-900", collapsed && "justify-center px-0")}
           onClick={async () => {
             await supabase.auth.signOut();
             router.replace("/login");
