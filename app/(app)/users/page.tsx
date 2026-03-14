@@ -9,7 +9,9 @@ import {
   createAdminUser,
   updateAdminUserRole,
   deleteAdminUser,
+  fetchAdminMetrics,
   type AdminUser,
+  type AdminMetrics,
 } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -39,6 +41,7 @@ const STATUSES = ["available", "busy", "offline"] as const;
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [metrics, setMetrics] = useState<AdminMetrics>({});
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
@@ -269,19 +272,31 @@ export default function UsersPage() {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Resolved</TableHead>
+                  <TableHead>Avg response</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Last Sign In</TableHead>
                   <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((u) => (
+                {filtered.map((u) => {
+                  const m = metrics[u.id];
+                  return (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.email}</TableCell>
                     <TableCell>
                       <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
                         {u.role}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {m?.resolved_chats ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {m?.avg_response_time_seconds != null
+                        ? `${m.avg_response_time_seconds}s`
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {u.created_at
@@ -431,7 +446,8 @@ export default function UsersPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+                })}
               </TableBody>
             </Table>
           )}

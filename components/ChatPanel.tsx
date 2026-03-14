@@ -3,6 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendReply, uploadImage } from "@/lib/api";
+import { QuickReplies } from "@/components/QuickReplies";
+import { EscalationDialog } from "@/components/EscalationDialog";
+import { ArrowUpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { canSendMessages } from "@/lib/auth";
 import {
@@ -13,6 +16,37 @@ import { Button } from "@/components/ui/button";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 const PAGE_SIZE = 50;
+
+function EscalationTrigger({
+  channelId,
+  lineUserId,
+  currentAdminId,
+}: {
+  channelId: string;
+  lineUserId: string;
+  currentAdminId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="shrink-0 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        title="Escalate"
+      >
+        <ArrowUpCircle className="h-4 w-4" />
+      </button>
+      <EscalationDialog
+        open={open}
+        onOpenChange={setOpen}
+        channelId={channelId}
+        lineUserId={lineUserId}
+        currentAdminId={currentAdminId}
+      />
+    </>
+  );
+}
 
 interface Message {
   id: string;
@@ -40,6 +74,14 @@ interface ChatPanelProps {
   selectedChat: ChatUserInfo | null;
   token: string;
   onProfileUpdated?: (profileName: string) => void;
+  /** Tags for filtering quick replies (e.g. from chat) */
+  quickReplyTags?: string[];
+  /** Current admin id for escalation */
+  currentAdminId?: string | null;
+  /** Call when chat is opened (mark viewed) */
+  onMarkViewed?: (channelId: string, lineUserId: string) => void;
+  /** Show escalation button */
+  showEscalation?: boolean;
 }
 
 export function ChatPanel({
@@ -49,6 +91,10 @@ export function ChatPanel({
   selectedChat,
   token,
   onProfileUpdated,
+  quickReplyTags = [],
+  currentAdminId,
+  onMarkViewed,
+  showEscalation = false,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -116,6 +162,7 @@ export function ChatPanel({
       setHasMore(true);
       fetchMessages();
       inputRef.current?.focus();
+      onMarkViewed?.(selectedChannelId, selectedUserId);
     } else {
       setMessages([]);
     }
@@ -262,6 +309,13 @@ export function ChatPanel({
             {selectedChat?.profile_name || `User ${selectedUserId?.slice(-8) || ""}`}
           </h3>
         </div>
+        {showEscalation && currentAdminId && selectedChannelId && selectedUserId && (
+          <EscalationTrigger
+            channelId={selectedChannelId}
+            lineUserId={selectedUserId}
+            currentAdminId={currentAdminId}
+          />
+        )}
         <button
           type="button"
           onClick={() => {
@@ -418,6 +472,11 @@ export function ChatPanel({
           </div>
         )}
         <div className="flex gap-2">
+          <QuickReplies
+            onSelect={(content) => setInput((prev) => prev ? `${prev}\n${content}` : content)}
+            filterTags={quickReplyTags}
+            disabled={sending || !canReply}
+          />
           <input
             ref={fileInputRef}
             type="file"

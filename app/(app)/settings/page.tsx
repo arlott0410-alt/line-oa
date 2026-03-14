@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { isSuperAdmin } from "@/lib/auth";
+import { isSuperAdmin, isAdminOrAbove } from "@/lib/auth";
 import { ChannelForm, type Channel } from "@/components/ChannelForm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,11 @@ export default function SettingsPage() {
   const [deleteOpen, setDeleteOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<Array<{ id: string; title: string; content: string; tags: string[] | null }>>([]);
+  const [qrAddOpen, setQrAddOpen] = useState(false);
+  const [qrTitle, setQrTitle] = useState("");
+  const [qrContent, setQrContent] = useState("");
+  const [qrTags, setQrTags] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -53,11 +58,15 @@ export default function SettingsPage() {
         router.replace("/login");
         return;
       }
-      isSuperAdmin().then((ok) => {
-        setAuthorized(ok);
-        if (!ok) {
-          toast.error("Access denied. Super Admin only.");
-          router.replace("/dashboard");
+      isSuperAdmin().then((superOk) => {
+        setAuthorized(superOk);
+        if (!superOk) {
+          isAdminOrAbove().then((adminOk) => {
+            if (!adminOk) {
+              toast.error("Access denied. Super Admin only.");
+              router.replace("/dashboard");
+            }
+          });
         }
       });
     });
@@ -71,8 +80,16 @@ export default function SettingsPage() {
     if (!error) setChannels(data || []);
   };
 
+  const fetchQuickReplies = async () => {
+    const { data } = await supabase.from("quick_replies").select("id, title, content, tags").order("title");
+    setQuickReplies(data || []);
+  };
+
   useEffect(() => {
-    if (authorized) fetchChannels();
+    if (authorized) {
+      fetchChannels();
+      fetchQuickReplies();
+    }
   }, [authorized]);
 
   useEffect(() => {
@@ -404,6 +421,129 @@ export default function SettingsPage() {
             </Table>
           )}
         </div>
+
+        {authorized && (
+          <div className="mt-12">
+            <h2 className="text-xl font-bold mb-4">Quick Replies</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Predefined replies for fast responses. Use tags to filter in chat (e.g. greeting, deposit).
+            </p>
+            <Dialog open={qrAddOpen} onOpenChange={setQrAddOpen}>
+              <Button onClick={() => setQrAddOpen(true)} className="mb-4 bg-[#06C755] hover:bg-[#05b04a]">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Quick Reply
+              </Button>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add Quick Reply</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Title</label>
+                    <Input
+                      value={qrTitle}
+                      onChange={(e) => setQrTitle(e.target.value)}
+                      placeholder="e.g. Greeting"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Content</label>
+                    <Input
+                      value={qrContent}
+                      onChange={(e) => setQrContent(e.target.value)}
+                      placeholder="Message text"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Tags (comma-separated)</label>
+                    <Input
+                      value={qrTags}
+                      onChange={(e) => setQrTags(e.target.value)}
+                      placeholder="greeting, deposit"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setQrAddOpen(false)}>Cancel</Button>
+                  <Button
+                    className="bg-[#06C755] hover:bg-[#05b04a]"
+                    onClick={async () => {
+                      if (!qrTitle || !qrContent) return;
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const tags = qrTags.split(",").map((t) => t.trim()).filter(Boolean);
+                      const { error } = await supabase.from("quick_replies").insert({
+                        title: qrTitle,
+                        content: qrContent,
+                        tags: tags.length ? tags : null,
+                        created_by: user?.id,
+                      });
+                      if (error) {
+                        toast.error(error.message);
+                        return;
+                      }
+                      toast.success("Quick reply added");
+                      setQrAddOpen(false);
+                      setQrTitle("");
+                      setQrContent("");
+                      setQrTags("");
+                      fetchQuickReplies();
+                    }}
+                  >
+                    Add
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              {quickReplies.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  No quick replies yet. Add one above.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Content</TableHead>
+                      <TableHead>Tags</TableHead>
+                      <TableHead className="w-16"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {quickReplies.map((qr) => (
+                      <TableRow key={qr.id}>
+                        <TableCell className="font-medium">{qr.title}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{qr.content}</TableCell>
+                        <TableCell className="text-xs font-mono">
+                          {(qr.tags || []).join(", ") || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={async () => {
+                              const { error } = await supabase.from("quick_replies").delete().eq("id", qr.id);
+                              if (error) toast.error(error.message);
+                              else {
+                                toast.success("Deleted");
+                                fetchQuickReplies();
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -623,7 +623,7 @@ app.get("/chats", async (c) => {
   const userId = userData.user?.id ?? userData.id;
   if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
 
-  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,last_message_content,last_message_timestamp,last_message_sender_type`;
+  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,last_message_content,last_message_timestamp,last_message_sender_type`;
   if (assignedToMe) url += `&assigned_admin_id=eq.${userId}`;
 
   const res = await fetch(url, {
@@ -685,13 +685,22 @@ app.get("/queue", async (c) => {
   if (!["super_admin", "admin"].includes(role)) return c.json({ error: "Admin required" }, 403);
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.unassigned&select=id,line_user_id,profile_name,channel_id,last_active,tags,last_message_content,last_message_timestamp&order=last_active.desc`,
+    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.unassigned&select=id,line_user_id,profile_name,channel_id,last_active,tags,vip_level,last_message_content,last_message_timestamp`,
     {
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
     }
   );
   if (!res.ok) return c.json({ error: "Failed to fetch queue" }, 500);
-  const items = await res.json();
+  let items = await res.json();
+  items = Array.isArray(items) ? items : [];
+  items.sort((a: { vip_level?: number; last_active?: string }, b: { vip_level?: number; last_active?: string }) => {
+    const va = a.vip_level ?? 0;
+    const vb = b.vip_level ?? 0;
+    if (vb !== va) return vb - va;
+    const ta = a.last_active ? new Date(a.last_active).getTime() : 0;
+    const tb = b.last_active ? new Date(b.last_active).getTime() : 0;
+    return ta - tb;
+  });
 
   const channelsRes = await fetch(
     `${supabaseUrl}/rest/v1/channels?select=id,name`,
@@ -720,6 +729,55 @@ app.get("/queue", async (c) => {
   );
 
   return c.json(withChannelAndMessage);
+});
+
+// POST /queue/assign - Bulk assign chats to current admin
+app.post("/queue/assign", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = authHeader.slice(7);
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+  });
+  const userData = await userRes.json();
+  const userId = userData.user?.id ?? userData.id;
+  if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    { headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` } }
+  );
+  const roles = await rolesRes.json();
+  const role = Array.isArray(roles) && roles.length > 0 ? roles[0]?.role : null;
+  if (!["super_admin", "admin"].includes(role)) return c.json({ error: "Admin required" }, 403);
+  let body: { items: Array<{ channel_id: string; line_user_id: string }> };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const items = body?.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return c.json({ error: "items array required" }, 400);
+  }
+  for (const it of items) {
+    await fetch(
+      `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${it.channel_id}&line_user_id=eq.${encodeURIComponent(it.line_user_id)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ assigned_admin_id: userId, queue_status: "assigned" }),
+      }
+    );
+  }
+  return c.json({ ok: true, count: items.length });
 });
 
 // GET /messages/:userId?channel_id=xxx&limit=50&offset=0
@@ -978,6 +1036,76 @@ app.get("/admin/users", async (c) => {
   }));
 
   return c.json(result);
+});
+
+// GET /admin/metrics - resolved_chats, avg_response_time per admin (super_admin only)
+app.get("/admin/metrics", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  const luRes = await fetch(
+    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.resolved&assigned_admin_id=not.is.null&select=assigned_admin_id`,
+    {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    }
+  );
+  const luData = luRes.ok ? await luRes.json() : [];
+  const resolvedByAdmin = new Map<string, number>();
+  for (const r of luData as { assigned_admin_id: string }[]) {
+    const id = r.assigned_admin_id;
+    if (id) resolvedByAdmin.set(id, (resolvedByAdmin.get(id) || 0) + 1);
+  }
+
+  const msgRes = await fetch(
+    `${supabaseUrl}/rest/v1/messages?select=channel_id,line_user_id,sender_type,timestamp&order=timestamp.asc`,
+    {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    }
+  );
+  const messages = msgRes.ok ? await msgRes.json() : [];
+  const firstUserByChat = new Map<string, number>();
+  const firstAdminByChat = new Map<string, number>();
+  for (const m of messages as { channel_id: string; line_user_id: string; sender_type: string; timestamp: string }[]) {
+    const key = `${m.channel_id}-${m.line_user_id}`;
+    const ts = new Date(m.timestamp).getTime();
+    if (m.sender_type === "user" && !firstUserByChat.has(key)) firstUserByChat.set(key, ts);
+    if (m.sender_type === "admin" && !firstAdminByChat.has(key)) firstAdminByChat.set(key, ts);
+  }
+
+  const luAssignRes = await fetch(
+    `${supabaseUrl}/rest/v1/line_users?assigned_admin_id=not.is.null&select=channel_id,line_user_id,assigned_admin_id`,
+    {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    }
+  );
+  const luAssign = luAssignRes.ok ? await luAssignRes.json() : [];
+  const responseTimesByAdmin = new Map<string, number[]>();
+  for (const r of luAssign as { channel_id: string; line_user_id: string; assigned_admin_id: string }[]) {
+    const key = `${r.channel_id}-${r.line_user_id}`;
+    const userTs = firstUserByChat.get(key);
+    const adminTs = firstAdminByChat.get(key);
+    if (userTs != null && adminTs != null && adminTs >= userTs) {
+      const diff = (adminTs - userTs) / 1000;
+      const arr = responseTimesByAdmin.get(r.assigned_admin_id) || [];
+      arr.push(diff);
+      responseTimesByAdmin.set(r.assigned_admin_id, arr);
+    }
+  }
+
+  const metrics: Record<string, { resolved_chats: number; avg_response_time_seconds: number }> = {};
+  const allAdminIds = new Set([...resolvedByAdmin.keys(), ...responseTimesByAdmin.keys()]);
+  for (const id of allAdminIds) {
+    const resolved = resolvedByAdmin.get(id) || 0;
+    const times = responseTimesByAdmin.get(id) || [];
+    const avg = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+    metrics[id] = { resolved_chats: resolved, avg_response_time_seconds: Math.round(avg) };
+  }
+  return c.json(metrics);
 });
 
 // POST /admin/users - Create user (super_admin only)

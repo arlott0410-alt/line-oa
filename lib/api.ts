@@ -118,6 +118,17 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   return res.json();
 }
 
+export type AdminMetrics = Record<
+  string,
+  { resolved_chats: number; avg_response_time_seconds: number }
+>;
+
+export async function fetchAdminMetrics(): Promise<AdminMetrics> {
+  const res = await fetchWithAuth(`${WORKER_URL}/admin/metrics`);
+  if (!res.ok) throw new Error("Failed to fetch metrics");
+  return res.json();
+}
+
 export async function createAdminUser(
   email: string,
   password: string,
@@ -155,6 +166,20 @@ export async function fetchLineBotUserId(accessToken: string): Promise<string> {
   }
   const data = await res.json();
   return data.userId;
+}
+
+export async function bulkAssignQueue(
+  items: Array<{ channel_id: string; line_user_id: string }>
+) {
+  const res = await fetchWithAuth(`${WORKER_URL}/queue/assign`, {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to assign");
+  }
+  return res.json();
 }
 
 export async function deleteAdminUser(uid: string) {

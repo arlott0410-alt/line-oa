@@ -34,6 +34,7 @@ interface SidebarProps {
   onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
   adminStatus?: "available" | "busy" | "offline";
   onStatusChange?: (status: "available" | "busy" | "offline") => void;
+  notifications?: React.ReactNode;
 }
 
 export function Sidebar({
@@ -52,6 +53,7 @@ export function Sidebar({
   onClaim,
   adminStatus = "offline",
   onStatusChange,
+  notifications,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,7 @@ export function Sidebar({
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">
       <div className="border-b border-gray-200 p-3 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
+        {notifications}
         {canClaim && onStatusChange && (
           <div className="flex items-center gap-1 shrink-0">
             {(["available", "busy", "offline"] as const).map((s) => {
