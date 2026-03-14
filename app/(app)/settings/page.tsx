@@ -23,7 +23,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Copy, ExternalLink } from "lucide-react";
+
+const WEBHOOK_BASE = (
+  process.env.NEXT_PUBLIC_WORKER_URL || "https://line-oa-worker.arlott0410.workers.dev"
+).replace(/\/$/, "");
+const WEBHOOK_URL = `${WEBHOOK_BASE}/webhook`;
 
 interface ChannelRow extends Channel {
   access_token?: string;
@@ -39,6 +44,7 @@ export default function SettingsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [webhookModalOpen, setWebhookModalOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -93,6 +99,7 @@ export default function SettingsPage() {
       toast.success("Channel added!");
       setAddOpen(false);
       fetchChannels();
+      setWebhookModalOpen(true);
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -123,8 +130,18 @@ export default function SettingsPage() {
       toast.success("Channel updated!");
       setEditingId(null);
       fetchChannels();
+      setWebhookModalOpen(true);
     } catch (err) {
       toast.error((err as Error).message);
+    }
+  };
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(WEBHOOK_URL);
+      toast.success("Copied!");
+    } catch {
+      toast.error("Failed to copy");
     }
   };
 
@@ -157,9 +174,7 @@ export default function SettingsPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Add and manage Line Official Account channels. Webhook URL:{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              {typeof window !== "undefined"
-                ? `${process.env.NEXT_PUBLIC_WORKER_URL || "YOUR_WORKER_URL"}/webhook`
-                : "YOUR_WORKER_URL/webhook"}
+              {WEBHOOK_URL}
             </code>
           </p>
         </div>
@@ -187,6 +202,45 @@ export default function SettingsPage() {
                 onSubmit={handleAdd}
                 onCancel={() => setAddOpen(false)}
               />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={webhookModalOpen} onOpenChange={setWebhookModalOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Channel Saved Successfully!</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Copy this Webhook URL and paste it into your Line OA&apos;s Messaging API settings in LINE Developers Console. The same URL is used for all channels—events are routed by bot_user_id.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <code className="flex-1 truncate text-sm text-gray-800">
+                  {WEBHOOK_URL}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyWebhook}
+                  className="shrink-0"
+                >
+                  <Copy className="mr-1 h-4 w-4" />
+                  Copy URL
+                </Button>
+              </div>
+              <DialogFooter>
+                <a
+                  href="https://developers.line.biz/console/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center justify-center rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted"
+                >
+                  <ExternalLink className="mr-1 h-4 w-4" />
+                  Go to LINE Console
+                </a>
+                <Button onClick={() => setWebhookModalOpen(false)} className="bg-[#06C755] hover:bg-[#05b04a]">
+                  Done
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>

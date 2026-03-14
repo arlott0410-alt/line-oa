@@ -92,6 +92,17 @@ supabase db push
 3. Fill: Name, Bot User ID, Access Token, Secret
 4. Configure webhook in Line Console: `https://YOUR-WORKER-URL/webhook`
 
+### Multi-OA Setup (Shared Webhook)
+
+All Line OAs use the **same Webhook URL**. Events are routed by `destination` (bot_user_id) from the Line webhook payload.
+
+1. After adding or editing a channel, a modal shows the Webhook URL—copy it.
+2. For each Line OA, go to [LINE Developers Console](https://developers.line.biz/console/) → Your channel → **Messaging API** tab.
+3. Under **Webhook settings**, set **Webhook URL** to the copied URL (e.g. `https://line-oa-worker.xxxx.workers.dev/webhook`).
+4. Enable **Use webhook**.
+
+The Worker receives events from all OAs on this single endpoint and routes them to the correct channel using `destination` (bot_user_id).
+
 ---
 
 ## 3. Environment Variables
