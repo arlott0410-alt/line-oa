@@ -208,6 +208,11 @@ export default function DashboardPage() {
         <ChatPanel
           selectedUserId={selectedUserId}
           selectedChannelId={selectedChannelId}
+          selectedChannelName={
+            channels.length > 1 && selectedChannelId
+              ? channels.find((c) => c.id === selectedChannelId)?.name ?? null
+              : null
+          }
           selectedChat={selectedChat}
           token={session.access_token}
           onProfileUpdated={(name) =>

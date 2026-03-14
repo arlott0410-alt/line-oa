@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { toast } from "sonner";
+import { CircleDot, Clock, CircleOff } from "lucide-react";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
@@ -118,41 +118,52 @@ export function Sidebar({
 
   return (
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">
-      <div className="border-b border-gray-200 p-4 space-y-3">
+      <div className="border-b border-gray-200 p-3 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
         {canClaim && onStatusChange && (
-          <div>
-            <p className="text-xs font-medium text-gray-600 mb-1">สถานะ</p>
-            <div className="flex gap-1">
-              {(["available", "busy", "offline"] as const).map((s) => (
+          <div className="flex items-center gap-1 shrink-0">
+            {(["available", "busy", "offline"] as const).map((s) => {
+              const labels = { available: "ว่าง", busy: "ไม่ว่าง", offline: "ออฟไลน์" };
+              const isActive = adminStatus === s;
+              const styles = isActive
+                ? s === "available"
+                  ? "bg-green-600 text-white"
+                  : s === "busy"
+                  ? "bg-amber-500 text-white"
+                  : "bg-gray-500 text-white"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200";
+              return (
                 <button
                   key={s}
                   type="button"
                   onClick={() => onStatusChange(s)}
-                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
-                    adminStatus === s
-                      ? s === "available"
-                        ? "bg-green-600 text-white"
-                        : s === "busy"
-                        ? "bg-amber-500 text-white"
-                        : "bg-gray-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                  title={labels[s]}
+                  className={`rounded-full p-1.5 transition ${styles}`}
                 >
-                  {s === "available" ? "ว่าง" : s === "busy" ? "ไม่ว่าง" : "ออฟไลน์"}
+                  {s === "available" ? (
+                    <CircleDot className="h-4 w-4" />
+                  ) : s === "busy" ? (
+                    <Clock className="h-4 w-4" />
+                  ) : (
+                    <CircleOff className="h-4 w-4" />
+                  )}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
-          <p className="text-xs text-gray-500">Line users</p>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900 truncate">Chats</h2>
+          {channels.length > 1 && (
+            <span className="text-[10px] text-gray-400">{channels.length} แชนเนล</span>
+          )}
+        </div>
         </div>
         {channels.length > 0 && (
           <select
             value={selectedChannelId || ""}
             onChange={(e) => onSelectChannel(e.target.value)}
-            className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           >
             {channels.map((ch) => (
               <option key={ch.id} value={ch.id}>

@@ -36,6 +36,7 @@ interface ChatUserInfo {
 interface ChatPanelProps {
   selectedUserId: string | null;
   selectedChannelId: string | null;
+  selectedChannelName?: string | null;
   selectedChat: ChatUserInfo | null;
   token: string;
   onProfileUpdated?: (profileName: string) => void;
@@ -44,6 +45,7 @@ interface ChatPanelProps {
 export function ChatPanel({
   selectedUserId,
   selectedChannelId,
+  selectedChannelName,
   selectedChat,
   token,
   onProfileUpdated,
@@ -243,7 +245,12 @@ export function ChatPanel({
       </Dialog>
 
       <div className="border-b border-gray-200 bg-white px-4 py-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {selectedChannelName && (
+            <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+              {selectedChannelName}
+            </span>
+          )}
           {selectedChat?.avatar ? (
             <img src={selectedChat.avatar} alt="" className="h-9 w-9 rounded-full object-cover shrink-0" />
           ) : (
