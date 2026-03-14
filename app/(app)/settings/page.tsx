@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Search, Copy, ExternalLink, CheckCircle2, Radio, Share2 } from "lucide-react";
-import { fetchLineBotUserId } from "@/lib/api";
+import { fetchLineBotUserId, invalidateChannelsCache } from "@/lib/api";
 
 const WEBHOOK_BASE = (
   process.env.NEXT_PUBLIC_WORKER_URL || "https://line-oa-worker.arlott0410.workers.dev"
@@ -170,6 +170,7 @@ export default function SettingsPage() {
         .update(updateData)
         .eq("id", id);
       if (error) throw new Error(error.message);
+      await invalidateChannelsCache();
       toast.success("Channel updated!");
       setEditingId(null);
       fetchChannels();
@@ -192,6 +193,7 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase.from("channels").delete().eq("id", id);
       if (error) throw new Error(error.message);
+      await invalidateChannelsCache();
       toast.success("Channel deleted");
       setEditingId(null);
       setDeleteOpen(null);

@@ -39,6 +39,15 @@ export async function fetchChannels() {
   return res.json();
 }
 
+/** ล้าง cache channels หลังเพิ่ม/แก้ไข/ลบ channel ใน Settings */
+export async function invalidateChannelsCache() {
+  const res = await fetchWithAuth(`${WORKER_URL}/cache/invalidate`, {
+    method: "POST",
+    body: JSON.stringify({ key: "channels_list" }),
+  });
+  if (!res.ok) return; // ไม่ต้อง throw - cache ไม่มีก็ยังทำงานได้
+}
+
 export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean }) {
   const headers = await getAuthHeaders();
   let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`;

@@ -633,7 +633,8 @@ app.get("/channels", async (c) => {
     return c.json({ error: "Invalid token" }, 401);
   }
 
-  if (kv) {
+  const nocache = c.req.query("nocache") === "1";
+  if (kv && !nocache) {
     const cached = await kv.get(CHANNELS_CACHE_KEY);
     if (cached) {
       try {
@@ -668,6 +669,33 @@ app.get("/channels", async (c) => {
     await kv.put(CHANNELS_CACHE_KEY, JSON.stringify(data), { expirationTtl: CHANNELS_CACHE_TTL });
   }
   return c.json(data);
+});
+
+// POST /cache/invalidate - ล้าง cache เมื่อเพิ่ม/แก้ไข/ลบ channel (auth required)
+app.post("/cache/invalidate", async (c) => {
+  const kv = c.env.CACHE_KV;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const token = authHeader.slice(7);
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const authData = await authRes.json();
+  if (authData.error) return c.json({ error: "Invalid token" }, 401);
+
+  let body: { key?: string };
+  try {
+    body = (await c.req.json().catch(() => ({}))) || {};
+  } catch {
+    body = {};
+  }
+  const key = body.key || CHANNELS_CACHE_KEY;
+  if (key !== CHANNELS_CACHE_KEY && !key.startsWith("chats:")) {
+    return c.json({ error: "Invalid key" }, 400);
+  }
+  if (kv) await kv.delete(key);
+  return c.json({ ok: true });
 });
 
 // GET /chats?channel_id=xxx&assigned_to=me&unread_only=1
