@@ -260,6 +260,33 @@ async function requireSuperAdmin(
   return { ok: true };
 }
 
+async function requireAdminOrAbove(
+  supabaseUrl: string,
+  serviceKey: string,
+  token: string
+): Promise<{ ok: true; userId: string } | { ok: false; status: number; body: object }> {
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+  });
+  const userData = await userRes.json();
+  const userId = userData.user?.id ?? userData.id;
+  if (userData.error || !userId) {
+    return { ok: false, status: 401, body: { error: "Invalid token" } };
+  }
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    }
+  );
+  const roles = await rolesRes.json();
+  const role = Array.isArray(roles) && roles.length > 0 ? roles[0]?.role : null;
+  if (!["super_admin", "admin"].includes(role)) {
+    return { ok: false, status: 403, body: { error: "Admin required" } };
+  }
+  return { ok: true, userId };
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
@@ -1021,9 +1048,64 @@ app.post("/reply", async (c) => {
   return c.json({ ok: true });
 });
 
-// --- Admin routes (super_admin only) ---
+// --- Admin routes ---
 
-// GET /admin/users - List users with roles
+// GET /admin/colleagues - List admin+super_admin for transfer (admin+ can use, แสดงเพื่อนที่ส่งแชทได้)
+app.get("/admin/colleagues", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = authHeader.slice(7);
+  const authCheck = await requireAdminOrAbove(supabaseUrl, supabaseServiceKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+  const excludeUserId = authCheck.userId;
+  const onlineOnly = c.req.query("online") === "1";
+
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?role=in.(admin,super_admin)&select=user_id`,
+    {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    }
+  );
+  if (!rolesRes.ok) return c.json({ error: "Failed to fetch" }, 500);
+  const roles = await rolesRes.json();
+  const adminIds = (Array.isArray(roles) ? roles : [])
+    .map((r: { user_id: string }) => r.user_id)
+    .filter((id: string) => id !== excludeUserId);
+  if (adminIds.length === 0) return c.json([]);
+
+  let idsToFetch = adminIds;
+  if (onlineOnly) {
+    const idsFilter = adminIds.map((id) => `"${id}"`).join(",");
+    const statusRes = await fetch(
+      `${supabaseUrl}/rest/v1/admin_status?user_id=in.(${idsFilter})&status=eq.available&select=user_id`,
+      {
+        headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+      }
+    );
+    if (statusRes.ok) {
+      const statusList = await statusRes.json();
+      idsToFetch = (Array.isArray(statusList) ? statusList : []).map((s: { user_id: string }) => s.user_id);
+    }
+  }
+
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+    headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+  });
+  if (!authRes.ok) return c.json({ error: "Failed to list users" }, 500);
+  const authData = await authRes.json();
+  const users = authData.users || [];
+  const result = idsToFetch
+    .map((id: string) => {
+      const u = users.find((x: { id: string }) => x.id === id);
+      return u ? { id: u.id, email: u.email || "" } : null;
+    })
+    .filter(Boolean);
+  return c.json(result);
+});
+
+// GET /admin/users - List users with roles (super_admin only)
 app.get("/admin/users", async (c) => {
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;

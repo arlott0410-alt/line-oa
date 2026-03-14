@@ -118,6 +118,14 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   return res.json();
 }
 
+/** รายชื่อเพื่อน admin/super_admin สำหรับส่งแชท (admin+ ใช้ได้, ?online=1 = เฉพาะออนไลน์) */
+export async function fetchColleagues(onlineOnly = true): Promise<{ id: string; email: string }[]> {
+  const url = `${WORKER_URL}/admin/colleagues${onlineOnly ? "?online=1" : ""}`;
+  const res = await fetchWithAuth(url);
+  if (!res.ok) throw new Error("Failed to fetch colleagues");
+  return res.json();
+}
+
 export type AdminMetrics = Record<
   string,
   { resolved_chats: number; avg_response_time_seconds: number }

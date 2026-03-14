@@ -21,10 +21,12 @@ function EscalationTrigger({
   channelId,
   lineUserId,
   currentAdminId,
+  onEscalated,
 }: {
   channelId: string;
   lineUserId: string;
   currentAdminId: string;
+  onEscalated?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -33,7 +35,7 @@ function EscalationTrigger({
         type="button"
         onClick={() => setOpen(true)}
         className="shrink-0 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        title="Escalate"
+        title="ส่งแชทให้เพื่อน"
       >
         <ArrowUpCircle className="h-4 w-4" />
       </button>
@@ -43,6 +45,7 @@ function EscalationTrigger({
         channelId={channelId}
         lineUserId={lineUserId}
         currentAdminId={currentAdminId}
+        onEscalated={onEscalated}
       />
     </>
   );
@@ -87,6 +90,8 @@ interface ChatPanelProps {
   onClaim?: (channelId: string, lineUserId: string) => void;
   /** Call when user resolves/closes a case — removes from My Chats */
   onResolve?: (channelId: string, lineUserId: string) => void;
+  /** Call when user transfers chat to another admin — close tab */
+  onEscalated?: (channelId: string, lineUserId: string) => void;
 }
 
 export function ChatPanel({
@@ -102,6 +107,7 @@ export function ChatPanel({
   showEscalation = false,
   onClaim,
   onResolve,
+  onEscalated,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -330,6 +336,7 @@ export function ChatPanel({
             channelId={selectedChannelId}
             lineUserId={selectedUserId}
             currentAdminId={currentAdminId}
+            onEscalated={onEscalated ? () => onEscalated(selectedChannelId, selectedUserId) : undefined}
           />
         )}
         {onResolve && showEscalation && currentAdminId && selectedChannelId && selectedUserId && selectedChat?.assigned_admin_id === currentAdminId && (

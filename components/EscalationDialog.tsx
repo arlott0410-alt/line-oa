@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { fetchAdminUsers, type AdminUser } from "@/lib/api";
+import { fetchColleagues } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ArrowUpCircle } from "lucide-react";
+import { toast } from "sonner";
 
 interface EscalationDialogProps {
   open: boolean;
@@ -31,25 +32,19 @@ export function EscalationDialog({
   currentAdminId,
   onEscalated,
 }: EscalationDialogProps) {
-  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [colleagues, setColleagues] = useState<{ id: string; email: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [showOffline, setShowOffline] = useState(false);
 
   useEffect(() => {
     if (open) {
-      fetchAdminUsers()
-        .then((data) =>
-          setAdmins(
-            data.filter(
-              (u) =>
-                ["admin", "super_admin"].includes(u.role) && u.id !== currentAdminId
-            )
-          )
-        )
-        .catch(() => setAdmins([]));
+      fetchColleagues(!showOffline)
+        .then(setColleagues)
+        .catch(() => setColleagues([]));
       setSelectedId("");
     }
-  }, [open, currentAdminId]);
+  }, [open, showOffline]);
 
   const handleEscalate = async () => {
     if (!selectedId) return;
@@ -73,10 +68,11 @@ export function EscalationDialog({
         content: "[Escalated]",
         escalated_to: selectedId,
       });
+      toast.success("ส่งแชทให้เพื่อนแล้ว");
       onEscalated?.();
       onOpenChange(false);
     } catch (err) {
-      console.error(err);
+      toast.error((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -86,35 +82,50 @@ export function EscalationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Escalate to another admin</DialogTitle>
+          <DialogTitle>ส่งแชทให้เพื่อน</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={showOffline}
+                onChange={(e) => setShowOffline(e.target.checked)}
+              />
+              แสดงทุกคน (รวมออฟไลน์)
+            </label>
+          </div>
           <div>
-            <Label>Select admin</Label>
+            <Label>เลือกเพื่อนที่จะส่งแชทให้</Label>
             <select
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
-              <option value="">— Choose —</option>
-              {admins.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.email} ({a.role})
+              <option value="">— เลือก —</option>
+              {colleagues.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.email}
                 </option>
               ))}
             </select>
+            {colleagues.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {showOffline ? "ไม่มี admin อื่นในระบบ" : "ไม่มีเพื่อนออนไลน์ — ลองติ๊กแสดงทุกคน"}
+              </p>
+            )}
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            ยกเลิก
           </Button>
           <Button
             onClick={handleEscalate}
             disabled={!selectedId || submitting}
             className="bg-[#06C755] hover:bg-[#05b04a]"
           >
-            {submitting ? "Escalating..." : "Escalate"}
+            {submitting ? "กำลังส่ง..." : "ส่งแชท"}
           </Button>
         </DialogFooter>
       </DialogContent>

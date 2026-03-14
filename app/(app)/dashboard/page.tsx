@@ -332,6 +332,17 @@ export default function DashboardPage() {
                     }
                   : undefined
               }
+              onEscalated={
+                canClaim && selectedChannelId && selectedUserId
+                  ? (chId, uId) => {
+                      closeTab(`${chId}-${uId}`);
+                      if (selectedUserId === uId && selectedChannelId === chId) {
+                        setSelectedUserId(null);
+                        setSelectedChat(null);
+                      }
+                    }
+                  : undefined
+              }
               onClaim={
                 canClaim && currentUserId
                   ? async (chId, uId) => {
@@ -426,6 +437,11 @@ export default function DashboardPage() {
                             const tabId = `${chId}-${uId}`;
                             closeTab(tabId);
                           }
+                        : undefined
+                    }
+                    onEscalated={
+                      canClaim && tab.channelId && tab.userId
+                        ? (chId, uId) => closeTab(`${chId}-${uId}`)
                         : undefined
                     }
                     onClaim={
