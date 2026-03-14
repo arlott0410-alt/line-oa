@@ -4,6 +4,7 @@
  */
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Env } from "../env";
 import { cors } from "hono/cors";
 
@@ -251,6 +252,36 @@ app.use(
 
 // GET /webhook - LINE may use for URL verification; return 200
 app.get("/webhook", (c) => c.json({ ok: true }));
+
+// GET /health และ GET /webhook/health - ตรวจสอบว่า Worker ทำงานและเชื่อมต่อ Supabase ได้
+async function healthHandler(c: Context<{ Bindings: Env }>) {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return c.json({ ok: false, error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }, 500);
+  }
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/channels?select=name,bot_user_id&order=name.asc`, {
+      headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+    });
+    const ok = res.ok;
+    const channels = ok ? await res.json() : [];
+    const list = Array.isArray(channels) ? channels : [];
+    return c.json({
+      ok: true,
+      supabase: ok ? "connected" : "error",
+      channels: list.map((ch: { name: string; bot_user_id: string }) => ({
+        name: ch.name,
+        channel_id: ch.bot_user_id,
+      })),
+      hint: "Channel ID ใน Settings ต้องตรงกับ destination ที่ LINE ส่ง (มักเป็นตัวเลขจาก Basic settings)",
+    });
+  } catch (e) {
+    return c.json({ ok: false, error: String(e) }, 500);
+  }
+}
+app.get("/health", healthHandler);
+app.get("/webhook/health", healthHandler);
 
 // POST /webhook - Line webhook (route by destination = bot_user_id)
 app.post("/webhook", async (c) => {
