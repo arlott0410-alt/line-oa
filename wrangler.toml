@@ -1,4 +1,4 @@
-name = "line-unified-inbox-worker"
+name = "line-oa-worker"
 main = "workers/src/index.ts"
 compatibility_date = "2026-03-01"
 compatibility_flags = ["nodejs_compat"]
