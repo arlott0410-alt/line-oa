@@ -12,6 +12,7 @@ export interface ChatUser {
   profile_name: string | null;
   avatar: string | null;
   last_active: string;
+  channel_id?: string;
   last_message?: {
     content: string;
     timestamp: string;
@@ -19,9 +20,17 @@ export interface ChatUser {
   } | null;
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  bot_user_id: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
 
   useEffect(() => {
@@ -33,6 +42,24 @@ export default function DashboardPage() {
       setSession(session);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (!session) return;
+    const fetchChannels = async () => {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787"}/channels`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(data);
+        if (data.length > 0 && !selectedChannelId) {
+          setSelectedChannelId(data[0].id);
+        }
+      }
+    };
+    fetchChannels();
+  }, [session]);
 
   if (!session) {
     return (
@@ -46,11 +73,15 @@ export default function DashboardPage() {
     <div className="flex h-screen overflow-hidden bg-slate-950">
       <Sidebar
         selectedUserId={selectedUserId}
+        selectedChannelId={selectedChannelId}
+        channels={channels}
+        onSelectChannel={setSelectedChannelId}
         onSelectUser={setSelectedUserId}
         token={session.access_token}
       />
       <ChatPanel
         selectedUserId={selectedUserId}
+        selectedChannelId={selectedChannelId}
         token={session.access_token}
       />
     </div>

@@ -16,10 +16,10 @@
 
 ### ตั้งค่า Worker Secrets (ครั้งเดียว)
 
+Credentials เก็บใน DB — Worker ใช้แค่ Supabase:
+
 ```powershell
 npx wrangler login
-npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_ANON_KEY
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
@@ -50,11 +50,7 @@ npx wrangler login
 
 ### 2.1 ตั้งค่า Secrets (ต้องมีก่อน deploy)
 
-รันทีละคำสั่ง แล้วใส่ค่าตามที่ถาม:
-
 ```powershell
-npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_ANON_KEY
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY

@@ -6,9 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # Public vars (non-secret) can go here
 
-# Secrets: set via `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN` etc.
-# LINE_CHANNEL_ACCESS_TOKEN
-# LINE_CHANNEL_SECRET
+# Secrets: set via `wrangler secret put SUPABASE_URL` etc.
+# Credentials now stored in DB (channels table), no LINE_* env needed
 # SUPABASE_URL
 # SUPABASE_ANON_KEY
 # SUPABASE_SERVICE_ROLE_KEY (for Worker to bypass RLS when storing webhook data)

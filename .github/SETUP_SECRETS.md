@@ -21,12 +21,10 @@
 
 ## Worker Secrets (ตั้งใน Cloudflare)
 
-Worker ต้องมี secrets แยกต่างหาก — รันครั้งเดียวหลัง login:
+Credentials เก็บใน DB (channels table) — Worker ใช้แค่ Supabase:
 
 ```powershell
 npx wrangler login
-npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_ANON_KEY
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY

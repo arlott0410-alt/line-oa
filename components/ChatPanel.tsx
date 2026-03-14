@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendReply } from "@/lib/api";
+import { canSendMessages } from "@/lib/auth";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 
@@ -12,33 +13,44 @@ interface Message {
   sender_type: "user" | "admin";
   content: string;
   timestamp: string;
+  channel_id?: string;
 }
 
 interface ChatPanelProps {
   selectedUserId: string | null;
+  selectedChannelId: string | null;
   token: string;
 }
 
-export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
+export function ChatPanel({
+  selectedUserId,
+  selectedChannelId,
+  token,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [canReply, setCanReply] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    canSendMessages().then(setCanReply);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const fetchMessages = async (silent = false) => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !selectedChannelId) return;
     if (!silent) setLoading(true);
     setError("");
     try {
       const res = await fetch(
-        `${WORKER_URL}/messages/${encodeURIComponent(selectedUserId)}`,
+        `${WORKER_URL}/messages/${encodeURIComponent(selectedUserId)}?channel_id=${encodeURIComponent(selectedChannelId)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error("Failed to fetch messages");
@@ -52,40 +64,41 @@ export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
   };
 
   useEffect(() => {
-    if (selectedUserId) {
+    if (selectedUserId && selectedChannelId) {
       fetchMessages();
       inputRef.current?.focus();
     } else {
       setMessages([]);
     }
-  }, [selectedUserId, token]);
+  }, [selectedUserId, selectedChannelId, token]);
 
-  // Supabase Realtime: subscribe to new messages for this user
   useEffect(() => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !selectedChannelId) return;
     const channel = supabase
-      .channel(`messages-${selectedUserId}`)
+      .channel(`messages-${selectedChannelId}-${selectedUserId}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `line_user_id=eq.${selectedUserId}`,
+          filter: `channel_id=eq.${selectedChannelId}`,
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
+          if (newMsg.line_user_id === selectedUserId) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedUserId]);
+  }, [selectedUserId, selectedChannelId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -93,14 +106,14 @@ export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !input.trim() || sending) return;
+    if (!selectedUserId || !selectedChannelId || !input.trim() || sending || !canReply)
+      return;
     const content = input.trim();
     setInput("");
     setSending(true);
     setError("");
     try {
-      await sendReply(selectedUserId, content);
-      // Realtime will push the new message; refetch to ensure we have it
+      await sendReply(selectedChannelId, selectedUserId, content);
       await fetchMessages(true);
     } catch (err) {
       setError((err as Error).message);
@@ -109,6 +122,14 @@ export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
       setSending(false);
     }
   };
+
+  if (!selectedChannelId) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center bg-slate-950 text-slate-500">
+        <p>Select a channel from the dropdown</p>
+      </main>
+    );
+  }
 
   if (!selectedUserId) {
     return (
@@ -170,6 +191,12 @@ export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
         </div>
       )}
 
+      {!canReply && (
+        <div className="border-t border-slate-800 bg-amber-900/20 px-4 py-2 text-sm text-amber-400">
+          Viewer role: You cannot send messages.
+        </div>
+      )}
+
       <form
         onSubmit={handleSend}
         className="flex gap-2 border-t border-slate-800 p-4"
@@ -181,11 +208,11 @@ export function ChatPanel({ selectedUserId, token }: ChatPanelProps) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
           className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-white placeholder-slate-500 focus:border-[#06C755] focus:outline-none focus:ring-1 focus:ring-[#06C755]"
-          disabled={sending}
+          disabled={sending || !canReply}
         />
         <button
           type="submit"
-          disabled={sending || !input.trim()}
+          disabled={sending || !input.trim() || !canReply}
           className="rounded-lg bg-[#06C755] px-6 py-2.5 font-medium text-white transition hover:bg-[#05b04a] disabled:opacity-50"
         >
           Send

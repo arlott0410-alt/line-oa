@@ -1,35 +1,36 @@
 # LineUnifiedInbox
 
-A production-ready MVP web app that aggregates all incoming chats from **one Line Official Account (Line OA)** into a single-window dashboard—similar to SaleSmartly's unified inbox, but focused solely on Line OA.
+A production-ready MVP web app that aggregates all incoming chats from **multiple Line Official Accounts (Line OA)** into a single-window dashboard—similar to SaleSmartly's unified inbox, but focused solely on Line OA.
 
 ## Features
 
-- **Unified Dashboard**: Single-page view of all Line conversations
+- **Multi-channel**: Add and manage multiple Line OA accounts via Settings
+- **Role-based access**: super_admin (manage channels/users), admin (manage chats), viewer (read-only)
+- **Unified Dashboard**: Single-page view with channel selector
 - **Real-time Chat**: Supabase Realtime for instant message updates
-- **Admin Auth**: Supabase Auth (email/password or magic link)
-- **Line Webhook**: Receives Line events, verifies signature (HMAC-SHA256), stores messages
-- **Reply via Line API**: Send text replies to users in real-time
+- **Line Webhook**: Routes by `destination` (bot_user_id), credentials stored in DB
+- **Reply via Line API**: Send text replies (admin+ only)
 
 ## Project Structure
 
 ```
 line-oa/
-├── app/                    # Next.js App Router
+├── app/
 │   ├── login/              # Login page
-│   ├── dashboard/          # Main dashboard
-│   └── ...
-├── components/             # React components
-│   ├── Sidebar.tsx         # User list
-│   └── ChatPanel.tsx       # Chat view + input
+│   ├── dashboard/          # Main dashboard (channel selector + chats)
+│   └── settings/           # Channel management (super_admin only)
+├── components/
+│   ├── Sidebar.tsx         # Channel dropdown + user list
+│   ├── ChatPanel.tsx       # Chat view + input
+│   └── ChannelForm.tsx      # Add/edit channel form
 ├── lib/
-│   ├── supabase.ts        # Supabase client
-│   └── api.ts             # Worker API client
-├── workers/
-│   └── src/index.ts       # Cloudflare Worker (webhook, chats, messages, reply)
-├── supabase/
-│   └── migrations/        # SQL schema
-├── wrangler.toml          # Worker config
-└── package.json
+│   ├── supabase.ts         # Supabase client
+│   ├── api.ts              # Worker API client
+│   ├── auth.ts             # Role check helpers
+│   └── roleCheck.ts        # Re-export
+├── workers/src/index.ts    # Cloudflare Worker (multi-channel webhook, reply)
+├── supabase/migrations/    # SQL schema (00000 initial, 00001 channels + roles)
+└── wrangler.toml
 ```
 
 ## Prerequisites
@@ -46,13 +47,17 @@ line-oa/
 ### Create a Supabase project
 
 1. Go to [supabase.com](https://supabase.com) and create a project
-2. In **SQL Editor**, run the migration:
+2. In **SQL Editor**, run migrations in order:
 
 ```sql
--- Copy contents from supabase/migrations/20260313000000_initial_schema.sql
+-- 1. Initial schema
+-- Copy from supabase/migrations/20260313000000_initial_schema.sql
+
+-- 2. Multi-channel + roles
+-- Copy from supabase/migrations/20260313000001_add_channels.sql
 ```
 
-Or run via Supabase CLI:
+Or via Supabase CLI:
 
 ```bash
 supabase db push
@@ -78,13 +83,14 @@ supabase db push
 3. Get:
    - **Channel Access Token** (long-lived)
    - **Channel Secret**
+   - **Bot User ID** (Messaging API tab, under "Bot basic ID" or from webhook `destination`)
 
-### Configure Webhook (after deploying Worker)
+### Add Channel via Settings (after first login)
 
-1. In Line Developers Console → Your channel → **Messaging API** tab
-2. **Webhook URL**: `https://YOUR-WORKER-URL.workers.dev/webhook`
-3. Enable **Use webhook**
-4. Disable **Auto-reply messages** and **Greeting messages** if you want full control
+1. Log in as **super_admin**
+2. Go to **Settings** → **Add Channel**
+3. Fill: Name, Bot User ID, Access Token, Secret
+4. Configure webhook in Line Console: `https://YOUR-WORKER-URL/webhook`
 
 ---
 
@@ -102,10 +108,10 @@ NEXT_PUBLIC_WORKER_URL=https://line-unified-inbox-worker.xxxx.workers.dev
 
 ### Cloudflare Worker (secrets)
 
+Credentials are stored in DB (`channels` table). Worker only needs Supabase:
+
 ```bash
 cd line-oa
-wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-wrangler secret put LINE_CHANNEL_SECRET
 wrangler secret put SUPABASE_URL
 wrangler secret put SUPABASE_ANON_KEY
 wrangler secret put SUPABASE_SERVICE_ROLE_KEY
@@ -127,11 +133,9 @@ npm install
 npm run dev:workers
 ```
 
-Worker runs at `http://localhost:8787`. Create `.dev.vars` for local secrets:
+Worker runs at `http://localhost:8787`. Create `.dev.vars`:
 
 ```env
-LINE_CHANNEL_ACCESS_TOKEN=xxx
-LINE_CHANNEL_SECRET=xxx
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_ANON_KEY=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
@@ -202,12 +206,19 @@ If you use a custom domain, update the CORS `origin` function in `workers/src/in
 
 ---
 
-## 6. Create Admin User
+## 6. Create Admin User & Set Role
 
 1. In Supabase Dashboard → **Authentication** → **Users**
-2. Click **Add user** → **Create new user**
-3. Enter email and password (or use magic link)
-4. Log in at your deployed app with these credentials
+2. Click **Add user** → **Create new user** (email + password)
+3. Copy the user's **UUID** (from the users table)
+4. In **SQL Editor**, run:
+
+```sql
+INSERT INTO user_roles (user_id, role) VALUES ('YOUR_USER_UUID', 'super_admin');
+```
+
+5. Log in at your deployed app
+6. Go to **Settings** → **Add Channel** to add your first Line OA (Bot User ID from Line Console)
 
 ---
 
@@ -215,19 +226,20 @@ If you use a custom domain, update the CORS `origin` function in `workers/src/in
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/webhook` | POST | Line webhook (signature verified) |
-| `/chats` | GET | List users + last message (requires `Authorization: Bearer <supabase_jwt>`) |
-| `/messages/:userId` | GET | Chat history for user (requires auth) |
-| `/reply` | POST | Send reply via Line (body: `{ line_user_id, content }`, requires auth) |
+| `/webhook` | POST | Line webhook (routes by `destination` = bot_user_id, credentials from DB) |
+| `/channels` | GET | List channels (auth) |
+| `/chats?channel_id=xxx` | GET | List users + last message (auth) |
+| `/messages/:userId?channel_id=xxx` | GET | Chat history (auth) |
+| `/reply` | POST | Send reply (body: `{ channel_id, line_user_id, content }`, auth, admin+) |
 
 ---
 
 ## Security
 
-- **Line webhook**: X-Line-Signature verified with HMAC-SHA256
-- **API**: All `/chats`, `/messages`, `/reply` require valid Supabase JWT
-- **Database**: RLS allows only `authenticated` and `service_role`
-- **Secrets**: Never commit `.env` or `.dev.vars`
+- **Line webhook**: X-Line-Signature verified with HMAC-SHA256 (secret from DB per channel)
+- **API**: All endpoints require valid Supabase JWT; `/reply` requires admin/super_admin role
+- **Database**: RLS by role (channels: super_admin write; messages: admin/viewer read, admin write)
+- **Credentials**: Stored in `channels` table (Supabase encryption)
 
 ---
 

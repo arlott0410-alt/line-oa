@@ -2,28 +2,45 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import type { ChatUser } from "@/app/dashboard/page";
+import type { ChatUser, Channel } from "@/app/dashboard/page";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 
 interface SidebarProps {
   selectedUserId: string | null;
+  selectedChannelId: string | null;
+  channels: Channel[];
+  onSelectChannel: (channelId: string) => void;
   onSelectUser: (userId: string | null) => void;
   token: string;
 }
 
-export function Sidebar({ selectedUserId, onSelectUser, token }: SidebarProps) {
+export function Sidebar({
+  selectedUserId,
+  selectedChannelId,
+  channels,
+  onSelectChannel,
+  onSelectUser,
+  token,
+}: SidebarProps) {
   const router = useRouter();
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchChats = async () => {
+    if (!selectedChannelId) {
+      setChats([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const res = await fetch(`${WORKER_URL}/chats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${WORKER_URL}/chats?channel_id=${encodeURIComponent(selectedChannelId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setChats(data);
@@ -35,25 +52,31 @@ export function Sidebar({ selectedUserId, onSelectUser, token }: SidebarProps) {
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchChats();
     const interval = setInterval(fetchChats, 15000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [selectedChannelId, token]);
 
-  // Subscribe to new messages for sidebar refresh
   useEffect(() => {
+    if (!selectedChannelId) return;
     const channel = supabase
-      .channel("sidebar-messages")
+      .channel(`sidebar-messages-${selectedChannelId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `channel_id=eq.${selectedChannelId}`,
+        },
         () => fetchChats()
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [token]);
+  }, [selectedChannelId, token]);
 
   return (
     <aside className="flex w-80 flex-col border-r border-slate-800 bg-slate-900/50">
@@ -63,20 +86,45 @@ export function Sidebar({ selectedUserId, onSelectUser, token }: SidebarProps) {
             <h2 className="text-lg font-semibold text-white">LineUnifiedInbox</h2>
             <p className="text-xs text-slate-400">Line users</p>
           </div>
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut();
-              router.replace("/login");
-            }}
-            className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-          >
-            Logout
-          </button>
+          <div className="flex gap-1">
+            <Link
+              href="/settings"
+              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              Settings
+            </Link>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.replace("/login");
+              }}
+              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              Logout
+            </button>
+          </div>
         </div>
+        {channels.length > 0 && (
+          <select
+            value={selectedChannelId || ""}
+            onChange={(e) => onSelectChannel(e.target.value)}
+            className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white"
+          >
+            {channels.map((ch) => (
+              <option key={ch.id} value={ch.id}>
+                {ch.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {!selectedChannelId ? (
+          <div className="p-4 text-center text-slate-500">
+            No channel selected. Add one in Settings.
+          </div>
+        ) : loading ? (
           <div className="p-4 text-center text-slate-500">Loading...</div>
         ) : error ? (
           <div className="p-4 text-center text-red-400">{error}</div>
@@ -87,7 +135,7 @@ export function Sidebar({ selectedUserId, onSelectUser, token }: SidebarProps) {
         ) : (
           <ul className="divide-y divide-slate-800/50">
             {chats.map((chat) => (
-              <li key={chat.line_user_id}>
+              <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
                   onClick={() => onSelectUser(chat.line_user_id)}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
