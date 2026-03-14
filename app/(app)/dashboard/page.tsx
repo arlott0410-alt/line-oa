@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { Button } from "@/components/ui/button";
 
 export interface ChatUser {
   id: string;
@@ -36,6 +34,7 @@ export default function DashboardPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -49,11 +48,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session) return;
+    setChannelError(null);
     const fetchChannels = async () => {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787"}/channels`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      );
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
+      const res = await fetch(`${workerUrl}/channels`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setChannels(data);
@@ -63,6 +63,10 @@ export default function DashboardPage() {
         if (data.length === 0) {
           setShowOnboarding(true);
         }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const msg = err.detail || err.error || `Error ${res.status}`;
+        setChannelError(msg);
       }
     };
     fetchChannels();
@@ -90,6 +94,7 @@ export default function DashboardPage() {
           onSelectChannel={setSelectedChannelId}
           onSelectUser={setSelectedUserId}
           token={session.access_token}
+          channelError={channelError}
         />
         <ChatPanel
           selectedUserId={selectedUserId}

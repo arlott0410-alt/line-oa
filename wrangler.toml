@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # SUPABASE_URL - ใส่ตรงนี้จะไม่หายเมื่อ deploy (แก้ไขก่อน push/deploy)
 # คัดลอกจาก Supabase Dashboard → Settings → API → Project URL
-SUPABASE_URL = "https://vcpkqiskumdndwcelnhy.supabase.co"
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 
 # Secrets (ตั้งใน Dashboard หรือ wrangler secret put):
 # SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_PUBLIC_BASE_URL

@@ -7,19 +7,23 @@ import { supabase } from "./supabase";
 export type UserRole = "super_admin" | "admin" | "viewer";
 
 export async function getUserRole(): Promise<UserRole | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
 
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (error || !data) return null;
-  return data.role as UserRole;
+    if (error || !data) return null;
+    return data.role as UserRole;
+  } catch {
+    return null;
+  }
 }
 
 export async function isSuperAdmin(): Promise<boolean> {

@@ -13,6 +13,7 @@ interface SidebarProps {
   onSelectChannel: (channelId: string) => void;
   onSelectUser: (userId: string | null) => void;
   token: string;
+  channelError?: string | null;
 }
 
 export function Sidebar({
@@ -22,6 +23,7 @@ export function Sidebar({
   onSelectChannel,
   onSelectUser,
   token,
+  channelError,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,19 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {!selectedChannelId ? (
+        {channelError ? (
+          <div className="space-y-2 p-4">
+            <p className="text-center text-sm font-medium text-amber-400">
+              ไม่สามารถโหลด channels ได้
+            </p>
+            <p className="text-center text-xs text-slate-500 break-all">
+              {channelError}
+            </p>
+            <p className="text-center text-xs text-slate-500">
+              ตรวจสอบ: Worker มี SUPABASE_URL, รัน migrations ใน Supabase, User มี role ใน user_roles
+            </p>
+          </div>
+        ) : !selectedChannelId ? (
           <div className="p-4 text-center text-slate-500">
             No channel selected. Add one in Settings.
           </div>
