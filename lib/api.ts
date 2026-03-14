@@ -39,12 +39,35 @@ export async function fetchChannels() {
   return res.json();
 }
 
-export async function fetchChats(channelId: string) {
+export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean }) {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`, {
-    headers,
-  });
+  let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`;
+  if (options?.assignedToMe) url += "&assigned_to=me";
+  if (options?.unreadOnly) url += "&unread_only=1";
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error("Failed to fetch chats");
+  return res.json();
+}
+
+/** Batch multiple operations into one request */
+export async function fetchBatch(operations: Array<
+  | { method: "get_channels" }
+  | { method: "get_chats"; channel_id: string; assigned_to?: string; unread_only?: "1" }
+>) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${WORKER_URL}/batch`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ operations }),
+  });
+  if (!res.ok) throw new Error("Failed to fetch batch");
+  const data = await res.json();
+  return data.results as unknown[];
+}
+
+export async function fetchQueue(): Promise<Array<{ id: string; line_user_id: string; profile_name: string | null; channel_id: string; channel_name: string; last_active: string; tags: string[] | null; last_message: { content: string; timestamp: string } | null }>> {
+  const res = await fetchWithAuth(`${WORKER_URL}/queue`);
+  if (!res.ok) return [];
   return res.json();
 }
 

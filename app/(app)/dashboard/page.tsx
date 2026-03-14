@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { fetchBatch, fetchQueue as fetchQueueApi } from "@/lib/api";
 import { Sidebar, type QueueItem } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -12,7 +13,7 @@ import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { X } from "lucide-react";
 
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
+const STORAGE_KEY_LAST_CHANNEL = "line-oa-last-channel";
 
 export interface ChatUser {
   id: string;
@@ -79,38 +80,42 @@ export default function DashboardPage() {
     });
   }, [session, canClaim]);
 
-  useEffect(() => {
+  const loadChannelsAndMaybeChats = useCallback(async () => {
     if (!session) return;
     setChannelError(null);
-    const fetchChannels = async () => {
-      const res = await fetch(`${WORKER_URL}/channels`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChannels(data);
-        if (data.length > 0 && !selectedChannelId) {
-          setSelectedChannelId(data[0].id);
-        }
-        if (data.length === 0) {
-          setShowOnboarding(true);
-        }
-      } else {
-        const err = await res.json().catch(() => ({}));
-        const msg = err.detail || err.error || `Error ${res.status}`;
-        setChannelError(msg);
+    const lastChannelId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_LAST_CHANNEL) : null;
+    const ops: Array<{ method: "get_channels" } | { method: "get_chats"; channel_id: string }> = [{ method: "get_channels" }];
+    if (lastChannelId) ops.push({ method: "get_chats", channel_id: lastChannelId });
+    try {
+      const results = await fetchBatch(ops);
+      const channelsData = Array.isArray(results[0]) ? results[0] : [];
+      setChannels(channelsData);
+      if (channelsData.length > 0) {
+        setSelectedChannelId((prev) => {
+          if (prev) return prev;
+          const channelToSelect = lastChannelId && channelsData.some((c: { id: string }) => c.id === lastChannelId)
+            ? lastChannelId
+            : channelsData[0].id;
+          return channelToSelect;
+        });
       }
-    };
-    fetchChannels();
+      if (channelsData.length === 0) setShowOnboarding(true);
+    } catch (err) {
+      const msg = (err as Error).message;
+      setChannelError(msg);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    loadChannelsAndMaybeChats();
   }, [session]);
 
   const fetchQueue = async () => {
     if (!session || !canClaim) return;
     try {
-      const res = await fetch(`${WORKER_URL}/queue`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) setQueueItems(await res.json());
+      const data = await fetchQueueApi();
+      setQueueItems(data);
     } catch {
       setQueueItems([]);
     }
@@ -128,10 +133,6 @@ export default function DashboardPage() {
     if (canClaim && session) {
       fetchQueue();
       fetchAdminStatus();
-      const interval = setInterval(() => {
-        if (document.visibilityState === "visible") fetchQueue();
-      }, 90000);
-      return () => clearInterval(interval);
     }
   }, [canClaim, session]);
 
@@ -247,6 +248,7 @@ export default function DashboardPage() {
           selectedChannelId={selectedChannelId}
           channels={channels}
           onSelectChannel={(id) => {
+            if (id && typeof window !== "undefined") localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, id);
             setSelectedChannelId(id);
             setSelectedUserId(null);
             setSelectedChat(null);

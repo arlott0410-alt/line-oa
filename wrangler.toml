@@ -17,3 +17,9 @@ SUPABASE_URL = "https://vcpkqiskumdndwcelnhy.supabase.co"
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
 bucket_name = "line-oa-images"
+
+# KV for caching channels/chats (optional - Worker works without it, just no cache)
+# Uncomment after: npx wrangler kv namespace create CACHE_KV
+# [[kv_namespaces]]
+# binding = "CACHE_KV"
+# id = "YOUR_KV_NAMESPACE_ID"

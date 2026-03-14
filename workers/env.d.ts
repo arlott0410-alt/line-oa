@@ -4,4 +4,5 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string;
   R2_PUBLIC_BASE_URL?: string;
   IMAGES_BUCKET?: R2Bucket;
+  CACHE_KV?: KVNamespace;
 }

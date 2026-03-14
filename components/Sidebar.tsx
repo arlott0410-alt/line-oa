@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchChats } from "@/lib/api";
+import debounce from "lodash/debounce";
 import { CircleDot, Clock, CircleOff } from "lucide-react";
 import { WorkflowGuide } from "@/components/WorkflowGuide";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
-
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 
 export interface QueueItem {
   id: string;
@@ -64,38 +64,41 @@ export function Sidebar({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchChats = async () => {
+  const loadChats = useCallback(async () => {
     if (!selectedChannelId) {
       setChats([]);
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setError("");
     try {
-      let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(selectedChannelId)}`;
-      if (showUnreadOnly) {
-        url += "&assigned_to=me&unread_only=1";
-      } else if (showMyChatsOnly) {
-        url += "&assigned_to=me";
-      }
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+      const data = await fetchChats(selectedChannelId, {
+        assignedToMe: showMyChatsOnly || showUnreadOnly,
+        unreadOnly: showUnreadOnly,
+      });
       setChats(data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedChannelId, showMyChatsOnly, showUnreadOnly]);
+
+  const debouncedLoadChats = useMemo(
+    () => debounce(loadChats, 300),
+    [loadChats]
+  );
 
   useEffect(() => {
-    setLoading(true);
-    fetchChats();
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") fetchChats();
-    }, 90000);
-    return () => clearInterval(interval);
-  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly]);
+    if (!selectedChannelId) {
+      setChats([]);
+      setLoading(false);
+      return;
+    }
+    debouncedLoadChats();
+    return () => debouncedLoadChats.cancel();
+  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats]);
 
   useEffect(() => {
     if (!selectedChannelId) return;
@@ -109,7 +112,7 @@ export function Sidebar({
           table: "messages",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        () => fetchChats()
+        loadChats
       )
       .on(
         "postgres_changes",
@@ -119,13 +122,13 @@ export function Sidebar({
           table: "line_users",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        () => fetchChats()
+        loadChats
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly]);
+  }, [selectedChannelId, loadChats]);
 
   return (
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">

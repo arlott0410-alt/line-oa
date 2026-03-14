@@ -26,6 +26,23 @@
 - ใช้ Supabase Realtime สำหรับ messages และ line_users
 - ข้อมูลอัปเดตทันทีเมื่อมี event ไม่ต้องพึ่ง polling มาก
 
+### 5. KV Cache (Worker)
+- `/channels` cache ใน KV (key: `channels_list`, TTL 300s)
+- `/chats` cache ต่อ channel/user (key: `chats:${channelId}:${userId|all}`, TTL 60s)
+- **ตั้งค่า:** สร้าง KV namespace แล้ว bind ใน wrangler.toml หรือ Dashboard:
+  ```bash
+  npx wrangler kv namespace create CACHE_KV
+  # ใส่ id ที่ได้ใน wrangler.toml [[kv_namespaces]] id = "..."
+  ```
+
+### 6. Batch Endpoint
+- `POST /batch` รองรับหลาย operations ใน request เดียว (เช่น get_channels + get_chats)
+- Frontend ใช้ batch สำหรับ initial load เมื่อมี last channel ใน localStorage
+
+### 7. ลด Polling เพิ่มเติม
+- ลบ setInterval polling สำหรับ /chats และ /queue — ใช้ Realtime เท่านั้น
+- Sidebar: debounce 300ms สำหรับ channel/filter change
+
 ## การรัน Migration
 
 ```bash

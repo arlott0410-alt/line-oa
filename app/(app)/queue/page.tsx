@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { isAdminOrAbove } from "@/lib/auth";
-import { bulkAssignQueue } from "@/lib/api";
+import { bulkAssignQueue, fetchQueue } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Crown, Clock } from "lucide-react";
-
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 
 interface QueueItem {
   id: string;
@@ -55,14 +53,11 @@ export default function QueuePage() {
     });
   }, [router]);
 
-  const fetchQueue = async () => {
+  const loadQueue = async () => {
     if (!session) return;
     try {
-      const res = await fetch(`${WORKER_URL}/queue`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) setItems(await res.json());
-      else setItems([]);
+      const data = await fetchQueue();
+      setItems(data);
     } catch {
       setItems([]);
     } finally {
@@ -71,18 +66,14 @@ export default function QueuePage() {
   };
 
   useEffect(() => {
-    if (session && authorized) fetchQueue();
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && session) fetchQueue();
-    }, 60000);
-    return () => clearInterval(interval);
+    if (session && authorized) loadQueue();
   }, [session, authorized]);
 
   useEffect(() => {
     if (!session || !authorized) return;
     const ch = supabase
       .channel("queue-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "line_users" }, fetchQueue)
+      .on("postgres_changes", { event: "*", schema: "public", table: "line_users" }, loadQueue)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [session, authorized]);
@@ -117,7 +108,7 @@ export default function QueuePage() {
       );
       toast.success(`Assigned ${toAssign.length} chat(s) to you`);
       setSelected(new Set());
-      fetchQueue();
+      loadQueue();
       router.push("/dashboard");
     } catch (err) {
       toast.error((err as Error).message);
@@ -139,7 +130,7 @@ export default function QueuePage() {
       return;
     }
     toast.success("รับแชทแล้ว");
-    fetchQueue();
+    loadQueue();
     router.push("/dashboard");
   };
 

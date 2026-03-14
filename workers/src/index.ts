@@ -604,10 +604,15 @@ app.post("/line/bot-info", async (c) => {
   return c.json({ userId: data.userId });
 });
 
-// GET /channels - List channels (auth required)
+const CHANNELS_CACHE_KEY = "channels_list";
+const CHANNELS_CACHE_TTL = 300; // 5 min
+const CHATS_CACHE_TTL = 60; // 1 min
+
+// GET /channels - List channels (auth required, cached in KV)
 app.get("/channels", async (c) => {
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const kv = c.env.CACHE_KV;
   const authHeader = c.req.header("Authorization");
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -626,6 +631,18 @@ app.get("/channels", async (c) => {
   const authData = await authRes.json();
   if (authData.error) {
     return c.json({ error: "Invalid token" }, 401);
+  }
+
+  if (kv) {
+    const cached = await kv.get(CHANNELS_CACHE_KEY);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        return c.json(data);
+      } catch {
+        /* invalid cache, fall through */
+      }
+    }
   }
 
   const res = await fetch(
@@ -647,6 +664,9 @@ app.get("/channels", async (c) => {
     );
   }
   const data = await res.json();
+  if (kv) {
+    await kv.put(CHANNELS_CACHE_KEY, JSON.stringify(data), { expirationTtl: CHANNELS_CACHE_TTL });
+  }
   return c.json(data);
 });
 
@@ -657,6 +677,7 @@ app.get("/chats", async (c) => {
   const unreadOnly = c.req.query("unread_only") === "1";
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const kv = c.env.CACHE_KV;
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -673,6 +694,19 @@ app.get("/chats", async (c) => {
   const userData = await userRes.json();
   const userId = userData.user?.id ?? userData.id;
   if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
+
+  const cacheKey = `chats:${channelId}:${assignedToMe ? (unreadOnly ? `${userId}:unread` : userId) : "all"}`;
+  if (kv) {
+    const cached = await kv.get(cacheKey);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        return c.json(data);
+      } catch {
+        /* invalid cache, fall through */
+      }
+    }
+  }
 
   let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type`;
   if (assignedToMe || unreadOnly) url += `&assigned_admin_id=eq.${userId}`;
@@ -735,7 +769,49 @@ app.get("/chats", async (c) => {
     })
   );
 
+  if (kv) {
+    await kv.put(cacheKey, JSON.stringify(usersWithLastMessage), { expirationTtl: CHATS_CACHE_TTL });
+  }
   return c.json(usersWithLastMessage);
+});
+
+// POST /batch - Execute multiple operations in one request (reduces round-trips)
+app.post("/batch", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  let body: { operations: Array<{ method: string; channel_id?: string; assigned_to?: string; unread_only?: string }> };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const { operations } = body;
+  if (!Array.isArray(operations) || operations.length === 0) {
+    return c.json({ error: "operations array required" }, 400);
+  }
+  const baseUrl = new URL(c.req.url).origin;
+  const headers = { Authorization: authHeader };
+  const results: unknown[] = [];
+  const promises = operations.map(async (op) => {
+    if (op.method === "get_channels") {
+      const res = await fetch(`${baseUrl}/channels`, { headers });
+      if (!res.ok) return { error: await res.text() };
+      return res.json();
+    }
+    if (op.method === "get_chats" && op.channel_id) {
+      let url = `${baseUrl}/chats?channel_id=${encodeURIComponent(op.channel_id)}`;
+      if (op.assigned_to) url += `&assigned_to=${encodeURIComponent(op.assigned_to)}`;
+      if (op.unread_only === "1") url += "&unread_only=1";
+      const res = await fetch(url, { headers });
+      if (!res.ok) return { error: await res.text() };
+      return res.json();
+    }
+    return { error: "Unknown method or missing params" };
+  });
+  const resolved = await Promise.all(promises);
+  return c.json({ results: resolved });
 });
 
 // GET /queue - Unassigned chats (admin+ only)
