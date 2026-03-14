@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { CircleDot, Clock, CircleOff } from "lucide-react";
+import { WorkflowGuide } from "@/components/WorkflowGuide";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
@@ -170,6 +171,7 @@ export function Sidebar({
           )}
         </div>
         </div>
+        {canClaim && <WorkflowGuide />}
         {channels.length > 0 && (
           <select
             value={selectedChannelId || ""}
@@ -184,38 +186,43 @@ export function Sidebar({
           </select>
         )}
         {onMyChatsToggle && canClaim && (
-          <div className="mt-2 flex gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                onMyChatsToggle(false);
-                onUnreadToggle?.(false);
-              }}
-              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onMyChatsToggle(true);
-                onUnreadToggle?.(false);
-              }}
-              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
-            >
-              My Chats
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onMyChatsToggle(true);
-                onUnreadToggle?.(true);
-              }}
-              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
-              title="เฉพาะแชทที่ยังไม่ได้อ่าน"
-            >
-              Unread
-            </button>
+          <div className="mt-2 space-y-1">
+            <p className="text-[10px] text-gray-500 font-medium">กรองแชท</p>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onMyChatsToggle(false);
+                  onUnreadToggle?.(false);
+                }}
+                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                title="แชททั้งหมดใน channel (รวมที่ยังไม่มีคนรับ)"
+              >
+                ทั้งหมด
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onMyChatsToggle(true);
+                  onUnreadToggle?.(false);
+                }}
+                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                title="แชทที่คุณกดรับไว้แล้ว — ใช้ดูแชทที่รับผิดชอบอยู่"
+              >
+                รับไว้แล้ว
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onMyChatsToggle(true);
+                  onUnreadToggle?.(true);
+                }}
+                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                title="แชทที่ลูกค้าส่งมาล่าสุดและยังไม่ได้เปิดดู — ตอบด่วน"
+              >
+                ยังไม่อ่าน
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -223,7 +230,8 @@ export function Sidebar({
       <div className="flex-1 overflow-y-auto flex flex-col">
         {canClaim && queueItems.length > 0 && onClaim && (
           <div className="border-b border-gray-200 p-3 bg-amber-50">
-            <p className="text-xs font-semibold text-amber-800 mb-2">คิวรอรับ ({queueItems.length})</p>
+            <p className="text-xs font-semibold text-amber-800 mb-1">คิวรอรับ ({queueItems.length})</p>
+            <p className="text-[10px] text-amber-700 mb-2">กด รับ เพื่อรับแชทมาทำงาน</p>
             <ul className="space-y-1 max-h-32 overflow-y-auto">
               {queueItems.map((q) => (
                 <li key={`${q.channel_id}-${q.line_user_id}`} className="flex items-center gap-2">
@@ -266,8 +274,12 @@ export function Sidebar({
         ) : error ? (
           <div className="p-4 text-center text-red-600">{error}</div>
         ) : chats.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            {showMyChatsOnly ? "No chats assigned to you." : "No conversations yet. Messages from Line will appear here."}
+          <div className="p-4 text-center text-gray-500 text-sm">
+            {showUnreadOnly
+              ? "ไม่มีแชทที่ยังไม่อ่าน"
+              : showMyChatsOnly
+              ? "ยังไม่มีแชทที่รับไว้ — ไปที่ Queue หรือกด รับ ในคิวรอรับด้านบน"
+              : "ยังไม่มีแชท — ลูกค้าส่งข้อความมาจะปรากฏที่นี่"}
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">

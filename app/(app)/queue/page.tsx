@@ -160,9 +160,9 @@ export default function QueuePage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Queue</h1>
+          <h1 className="text-2xl font-bold">คิวรอรับ</h1>
           <p className="text-sm text-muted-foreground">
-            Unassigned chats · Sorted by VIP first, then wait time
+            แชทที่ยังไม่มีคนรับ · เรียงตาม VIP ก่อน แล้วตามเวลารอ
           </p>
         </div>
         {items.length > 0 && (
@@ -171,14 +171,14 @@ export default function QueuePage() {
               variant="outline"
               onClick={toggleAll}
             >
-              {selected.size === items.length ? "Deselect All" : "Select All"}
+              {selected.size === items.length ? "ยกเลิกทั้งหมด" : "เลือกทั้งหมด"}
             </Button>
             <Button
               onClick={handleBulkAssign}
               disabled={selected.size === 0 || assigning}
               className="bg-[#06C755] hover:bg-[#05b04a]"
             >
-              {assigning ? "Assigning..." : `Assign to Me (${selected.size})`}
+              {assigning ? "กำลังรับ..." : `รับไว้ทั้งหมด (${selected.size})`}
             </Button>
           </div>
         )}
@@ -188,7 +188,7 @@ export default function QueuePage() {
         <div className="py-12 text-center text-muted-foreground">Loading...</div>
       ) : items.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground rounded-lg border bg-white">
-          No chats in queue
+          ไม่มีแชทในคิว — ลูกค้าส่งข้อความมาจะปรากฏที่นี่
         </div>
       ) : (
         <div className="rounded-lg border bg-white overflow-hidden">
@@ -202,11 +202,11 @@ export default function QueuePage() {
                     onChange={toggleAll}
                   />
                 </TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Channel</TableHead>
-                <TableHead>Wait</TableHead>
-                <TableHead>Last message</TableHead>
-                <TableHead className="w-24">Actions</TableHead>
+                <TableHead>ลูกค้า</TableHead>
+                <TableHead>แชนเนล</TableHead>
+                <TableHead>รอ</TableHead>
+                <TableHead>ข้อความล่าสุด</TableHead>
+                <TableHead className="w-24">ดำเนินการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

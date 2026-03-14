@@ -65,6 +65,7 @@ interface ChatUserInfo {
   profile_name: string | null;
   avatar: string | null;
   channel_id?: string;
+  assigned_admin_id?: string | null;
 }
 
 interface ChatPanelProps {
@@ -82,6 +83,8 @@ interface ChatPanelProps {
   onMarkViewed?: (channelId: string, lineUserId: string) => void;
   /** Show escalation button */
   showEscalation?: boolean;
+  /** Call when user claims an unassigned chat */
+  onClaim?: (channelId: string, lineUserId: string) => void;
 }
 
 export function ChatPanel({
@@ -95,6 +98,7 @@ export function ChatPanel({
   currentAdminId,
   onMarkViewed,
   showEscalation = false,
+  onClaim,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -293,6 +297,15 @@ export function ChatPanel({
 
       <div className="border-b border-gray-200 bg-white px-4 py-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
+          {onClaim && showEscalation && currentAdminId && selectedChannelId && selectedUserId && selectedChat?.assigned_admin_id !== currentAdminId && (
+            <button
+              type="button"
+              onClick={() => onClaim(selectedChannelId, selectedUserId)}
+              className="shrink-0 rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
+            >
+              รับแชท
+            </button>
+          )}
           {selectedChannelName && (
             <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
               {selectedChannelName}
@@ -366,6 +379,12 @@ export function ChatPanel({
           </div>
         </DialogContent>
       </Dialog>
+
+      {onClaim && showEscalation && currentAdminId && selectedChat?.assigned_admin_id !== currentAdminId && (
+        <div className="shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100 text-sm text-amber-800 flex items-center justify-between gap-2">
+          <span>แชทนี้ยังไม่มีคุณรับ — กดปุ่ม รับแชท ด้านบนเพื่อรับมาทำงาน</span>
+        </div>
+      )}
 
       <div
         ref={scrollRef}

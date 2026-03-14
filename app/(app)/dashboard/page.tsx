@@ -22,6 +22,7 @@ export interface ChatUser {
   last_active: string;
   channel_id?: string;
   tags?: string[] | null;
+  assigned_admin_id?: string | null;
   last_message?: {
     content: string;
     timestamp: string;
@@ -319,6 +320,18 @@ export default function DashboardPage() {
                   .eq("assigned_admin_id", currentUserId);
               }}
               showEscalation={canClaim}
+              onClaim={
+                canClaim && currentUserId
+                  ? async (chId, uId) => {
+                      await handleClaim(uId, chId);
+                      setSelectedChat((c) =>
+                        c && c.line_user_id === uId && c.channel_id === chId
+                          ? { ...c, assigned_admin_id: currentUserId }
+                          : c
+                      );
+                    }
+                  : undefined
+              }
             />
           ) : (
             <Tabs
@@ -395,6 +408,20 @@ export default function DashboardPage() {
                         .eq("assigned_admin_id", currentUserId);
                     }}
                     showEscalation={canClaim}
+                    onClaim={
+                      canClaim && currentUserId
+                        ? async (chId, uId) => {
+                            await handleClaim(uId, chId);
+                            setOpenChats((prev) =>
+                              prev.map((t) =>
+                                t.channelId === chId && t.userId === uId
+                                  ? { ...t, chat: { ...t.chat, assigned_admin_id: currentUserId } }
+                                  : t
+                              )
+                            );
+                          }
+                        : undefined
+                    }
                   />
                 </TabsContent>
               ))}
