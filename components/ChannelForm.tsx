@@ -6,6 +6,7 @@ export interface Channel {
   id: string;
   name: string;
   bot_user_id: string;
+  line_channel_id?: string;
   created_at: string;
 }
 
@@ -28,7 +29,7 @@ export function ChannelForm({
   const [name, setName] = useState(channel?.name || "");
   const [accessToken, setAccessToken] = useState("");
   const [secret, setSecret] = useState("");
-  const [botUserId, setBotUserId] = useState(channel?.bot_user_id || "");
+  const [botUserId, setBotUserId] = useState(channel?.line_channel_id || channel?.bot_user_id || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,7 +37,7 @@ export function ChannelForm({
     e.preventDefault();
     setError("");
     if (!name.trim() || !botUserId.trim()) {
-      setError("Name and Channel ID are required");
+      setError("Name และ Channel ID จำเป็น");
       return;
     }
     if (!channel && (!accessToken.trim() || !secret.trim())) {
@@ -76,12 +77,12 @@ export function ChannelForm({
           type="text"
           value={botUserId}
           onChange={(e) => setBotUserId(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-600 font-mono text-sm placeholder-gray-400"
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-600 font-mono text-sm placeholder-gray-400 disabled:opacity-70"
           placeholder="2009440045"
           disabled={!!channel}
         />
         <p className="mt-1 text-xs text-gray-500">
-          จาก LINE Developers Console → Basic settings (ตัวเลข Channel ID)
+          {channel ? "ไม่สามารถแก้ไขได้หลังสร้าง" : "จาก LINE Developers Console → Basic settings — ระบบจะดึง Bot User ID อัตโนมัติ"}
         </p>
       </div>
       <div>

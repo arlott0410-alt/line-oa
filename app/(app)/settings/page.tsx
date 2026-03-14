@@ -24,6 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Search, Copy, ExternalLink, CheckCircle2, Radio } from "lucide-react";
+import { fetchLineBotUserId } from "@/lib/api";
 
 const WEBHOOK_BASE = (
   process.env.NEXT_PUBLIC_WORKER_URL || "https://line-oa-worker.arlott0410.workers.dev"
@@ -65,7 +66,7 @@ export default function SettingsPage() {
   const fetchChannels = async () => {
     const { data, error } = await supabase
       .from("channels")
-      .select("id, name, bot_user_id, created_at")
+      .select("id, name, bot_user_id, line_channel_id, created_at")
       .order("created_at", { ascending: false });
     if (!error) setChannels(data || []);
   };
@@ -82,7 +83,8 @@ export default function SettingsPage() {
   const filtered = channels.filter(
     (ch) =>
       ch.name.toLowerCase().includes(search.toLowerCase()) ||
-      ch.bot_user_id.toLowerCase().includes(search.toLowerCase())
+      ch.bot_user_id.toLowerCase().includes(search.toLowerCase()) ||
+      (ch.line_channel_id || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAdd = async (formData: {
@@ -92,11 +94,14 @@ export default function SettingsPage() {
     bot_user_id: string;
   }) => {
     try {
+      toast.loading("กำลังดึง Bot User ID จาก LINE...");
+      const botUserId = await fetchLineBotUserId(formData.access_token);
+      toast.dismiss();
       const { error } = await supabase.from("channels").insert({
         name: formData.name,
         access_token: formData.access_token,
         secret: formData.secret,
-        bot_user_id: formData.bot_user_id,
+        bot_user_id: botUserId,
         line_channel_id: formData.bot_user_id,
       });
       if (error) throw new Error(error.message);
@@ -105,6 +110,7 @@ export default function SettingsPage() {
       fetchChannels();
       setWebhookModalOpen(true);
     } catch (err) {
+      toast.dismiss();
       toast.error((err as Error).message);
     }
   };
@@ -339,7 +345,7 @@ export default function SettingsPage() {
                       <>
                         <TableCell className="font-medium text-gray-900">{ch.name}</TableCell>
                         <TableCell className="font-mono text-sm text-gray-600">
-                          {ch.bot_user_id}
+                          {ch.line_channel_id || ch.bot_user_id}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-0.5">

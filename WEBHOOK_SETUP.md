@@ -19,18 +19,13 @@
 3. **เปิด "Use webhook"** (ต้องเป็นสีเขียว/เปิด)
 4. กด **Verify** เพื่อทดสอบว่า LINE ส่ง request ถึง Worker ได้
 
-### 3. Channel ID ไม่ตรงกับ destination
+### 3. Channel ID และ Bot User ID
 
-LINE ส่ง `destination` ใน webhook body เพื่อระบุว่าเป็น channel ไหน  
-ค่า **Channel ID** ใน Settings ต้องตรงกับ `destination` ที่ LINE ส่งมา
+LINE ส่ง `destination` ใน webhook (มักเป็น Bot User ID รูปแบบ `Uxxxxxxxx`)  
+**ระบบจะดึง Bot User ID อัตโนมัติ** เมื่อ Add Channel — แค่ใส่ Channel ID (2009440045) + Access Token
 
-**วิธีหา Channel ID ที่ถูกต้อง:**
-
-- ไปที่ LINE Developers Console → Channel → **Basic settings** tab
-- ดูที่ **Channel ID** (ตัวเลข เช่น `2009440045`)
-- สำหรับ Messaging API ส่วนใหญ่ LINE จะส่ง Channel ID นี้ใน `destination`
-
-ถ้า Channel ID ใน Settings ไม่ตรงกับ `destination` ที่ LINE ส่งมา ระบบจะไม่รู้ว่าเป็น channel ไหน และจะไม่บันทึกข้อความ
+- **Channel ID** ไม่สามารถแก้ไขได้หลังสร้าง
+- ถ้า channel เดิมยังใช้ Channel ID อยู่ ให้ลบแล้ว Add ใหม่ (ระบบจะดึง Bot User ID ให้)
 
 ### 4. Channel Secret ไม่ตรงกัน
 

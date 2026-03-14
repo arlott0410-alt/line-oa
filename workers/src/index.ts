@@ -457,6 +457,37 @@ app.post("/webhook", async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /line/bot-info - ดึง Bot User ID จาก LINE API (super_admin only, ใช้เมื่อ Add Channel)
+app.post("/line/bot-info", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  let body: { access_token: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const { access_token } = body;
+  if (!access_token) return c.json({ error: "access_token required" }, 400);
+
+  const lineRes = await fetch("https://api.line.me/v2/bot/info", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!lineRes.ok) {
+    const err = await lineRes.text();
+    return c.json({ error: "LINE API error", detail: err.slice(0, 200) }, 400);
+  }
+  const data = (await lineRes.json()) as { userId?: string };
+  if (!data.userId) return c.json({ error: "No userId in LINE response" }, 400);
+  return c.json({ userId: data.userId });
+});
+
 // GET /channels - List channels (auth required)
 app.get("/channels", async (c) => {
   const supabaseUrl = c.env.SUPABASE_URL as string;

@@ -117,6 +117,20 @@ export async function updateAdminUserRole(uid: string, role: string) {
   return res.json();
 }
 
+/** ดึง Bot User ID จาก LINE API (ใช้เมื่อ Add Channel - ใส่แค่ Channel ID + Access Token) */
+export async function fetchLineBotUserId(accessToken: string): Promise<string> {
+  const res = await fetchWithAuth(`${WORKER_URL}/line/bot-info`, {
+    method: "POST",
+    body: JSON.stringify({ access_token: accessToken }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || err.error || "Failed to get Bot User ID from LINE");
+  }
+  const data = await res.json();
+  return data.userId;
+}
+
 export async function deleteAdminUser(uid: string) {
   const res = await fetchWithAuth(`${WORKER_URL}/admin/users/${uid}`, {
     method: "DELETE",
