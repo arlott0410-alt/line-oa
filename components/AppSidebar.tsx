@@ -43,7 +43,7 @@ export function AppSidebar() {
       <div className="flex h-14 items-center justify-between border-b border-border px-3">
         {!collapsed && (
           <Link href="/dashboard" className="font-semibold text-gray-800">
-            LineUnifiedInbox
+            OKACE Line OA
           </Link>
         )}
         <Button

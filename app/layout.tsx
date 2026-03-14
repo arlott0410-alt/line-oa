@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "LineUnifiedInbox",
+  title: "OKACE Line OA",
   description: "Unified inbox for Line Official Account",
 };
 

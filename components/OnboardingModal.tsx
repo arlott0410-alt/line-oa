@@ -20,7 +20,7 @@ export function OnboardingModal({ open, onOpenChange }: OnboardingModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Welcome to LineUnifiedInbox</DialogTitle>
+          <DialogTitle>Welcome to OKACE Line OA</DialogTitle>
           <DialogDescription>
             Add your first Line Official Account to start receiving and
             replying to messages in one place.

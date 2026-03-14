@@ -31,7 +31,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">LineUnifiedInbox</h1>
+          <h1 className="text-3xl font-bold text-gray-900">OKACE Line OA</h1>
           <p className="mt-2 text-gray-500">Unified inbox for Line Official Account</p>
         </div>
 
