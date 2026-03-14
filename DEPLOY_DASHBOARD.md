@@ -13,6 +13,22 @@
 
 ค่าที่ตั้งใน Dashboard จะคงอยู่จนกว่าคุณจะแก้ไขเอง
 
+### ถ้า SUPABASE_URL หายบ่อย (ใส่ใน Dashboard แล้วหาย)
+
+**สาเหตุ:** อาจมี Worker เชื่อม Git ที่ auto-deploy ทุกครั้งที่ push — การ deploy ใหม่อาจ reset บางค่า
+
+**วิธีแก้ถาวร:** ใส่ SUPABASE_URL ใน `wrangler.toml` แทน (จะ deploy ไปกับโค้ด ไม่หาย)
+
+1. เปิดไฟล์ `wrangler.toml`
+2. แก้บรรทัด `SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"`
+3. ใส่ URL จริงจาก Supabase (เช่น `https://abcdefgh.supabase.co`)
+4. เลือกอย่างใดอย่างหนึ่ง:
+   - **ถ้า Worker เชื่อม Git:** Save แล้ว push ขึ้น GitHub → auto-deploy จะใช้ค่าใน wrangler.toml
+   - **ถ้า deploy แบบ copy-paste:** รัน `npx wrangler deploy` ครั้งเดียว (ต้อง login ด้วย `npx wrangler login` ก่อน) → ค่าจะถูก deploy ไปกับโค้ด  
+     - ถ้า Worker ชื่อต่างกัน (เช่น line-oa-worker) ให้แก้ `name = "..."` ใน wrangler.toml ให้ตรงกับ Worker ที่มีอยู่
+
+หลังจากนั้น SUPABASE_URL จะอยู่ใน deployment และไม่หายอีก
+
 ---
 
 ## สิ่งที่ต้องเตรียมก่อน
@@ -52,13 +68,13 @@ npm run build:worker
 
 ### ขั้นตอนที่ 4: ตั้งค่า Variables (Secrets)
 
-1. ไปที่ Worker → **Settings** → **Variables and Secrets**
-2. คลิก **Add variable** → **Secret**
-3. เพิ่ม:
+**วิธีที่ 1 (แนะนำ – ไม่หาย):** ใส่ SUPABASE_URL ใน `wrangler.toml` แก้ก่อน push แล้ว deploy จาก Git
+
+**วิธีที่ 2:** ใส่ใน Dashboard → **Settings** → **Variables and Secrets** → **Add variable** → **Secret**
 
 | Name | Value |
 |------|-------|
-| `SUPABASE_URL` | URL โปรเจกต์ Supabase (เช่น https://xxx.supabase.co) |
+| `SUPABASE_URL` | URL โปรเจกต์ Supabase (เช่น https://xxx.supabase.co) — หรือใส่ใน wrangler.toml |
 | `SUPABASE_ANON_KEY` | Anon key จาก Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key จาก Supabase |
 | `R2_PUBLIC_BASE_URL` | (Optional) Public URL ของ R2 bucket สำหรับรูปภาพ เช่น `https://pub-xxx.r2.dev` |

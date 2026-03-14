@@ -1,17 +1,15 @@
-name = "line-unified-inbox-worker"
+name = "line-oa-worker"
 main = "workers/src/index.ts"
 compatibility_date = "2026-03-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-# Public vars (non-secret) can go here
+# SUPABASE_URL - ใส่ตรงนี้จะไม่หายเมื่อ deploy (แก้ไขก่อน push/deploy)
+# คัดลอกจาก Supabase Dashboard → Settings → API → Project URL
+SUPABASE_URL = "https://vcpkqiskumdndwcelnhy.supabase.co"
 
-# Secrets: set via `wrangler secret put SUPABASE_URL` etc.
-# Credentials now stored in DB (channels table), no LINE_* env needed
-# SUPABASE_URL
-# SUPABASE_ANON_KEY
-# SUPABASE_SERVICE_ROLE_KEY (for Worker to bypass RLS when storing webhook data)
-# R2_PUBLIC_BASE_URL (e.g. https://pub-xxx.r2.dev - for image URLs)
+# Secrets (ตั้งใน Dashboard หรือ wrangler secret put):
+# SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_PUBLIC_BASE_URL
 
 # R2 bucket for user-sent images
 # Deploy via Dashboard: สร้าง bucket ใน R2 → Worker Settings → R2 bucket bindings → Add IMAGES_BUCKET
