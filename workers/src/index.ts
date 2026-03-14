@@ -84,25 +84,30 @@ async function getChannelByBotUserId(
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
+// ตรวจสอบ super_admin โดยใช้ service_role (bypass RLS) — ทำงานได้แน่นอน
 async function requireSuperAdmin(
   supabaseUrl: string,
-  anonKey: string,
+  serviceKey: string,
   token: string
 ): Promise<{ ok: true } | { ok: false; status: number; body: object }> {
   const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${token}`,
+    },
   });
   const userData = await userRes.json();
   const userId = userData.user?.id ?? userData.id;
   if (userData.error || !userId) {
     return { ok: false, status: 401, body: { error: "Invalid token" } };
   }
+  // ใช้ service_role อ่าน user_roles — ไม่ติด RLS
   const rolesRes = await fetch(
     `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
     {
       headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${token}`,
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
       },
     }
   );
@@ -542,7 +547,7 @@ app.get("/admin/users", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   const token = authHeader.slice(7);
-  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
   if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
 
   const authRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
@@ -592,7 +597,7 @@ app.post("/admin/users", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   const token = authHeader.slice(7);
-  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
   if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
 
   let body: { email: string; password: string; role: string };
@@ -653,7 +658,7 @@ app.patch("/admin/users/:uid/role", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   const token = authHeader.slice(7);
-  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
   if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
 
   let body: { role: string };
@@ -696,7 +701,7 @@ app.delete("/admin/users/:uid", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   const token = authHeader.slice(7);
-  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
   if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
 
   const delRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${uid}`, {
