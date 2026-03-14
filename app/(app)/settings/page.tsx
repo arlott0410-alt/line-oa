@@ -97,6 +97,7 @@ export default function SettingsPage() {
         access_token: formData.access_token,
         secret: formData.secret,
         bot_user_id: formData.bot_user_id,
+        line_channel_id: formData.bot_user_id,
       });
       if (error) throw new Error(error.message);
       toast.success("Channel added!");

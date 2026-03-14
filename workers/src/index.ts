@@ -72,13 +72,22 @@ function supabaseFetch(
   });
 }
 
-async function getChannelByBotUserId(
+async function getChannelByDestination(
   baseUrl: string,
   serviceKey: string,
-  botUserId: string
+  destination: string
 ): Promise<{ id: string; secret: string; access_token: string } | null> {
-  const res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
-    params: `bot_user_id=eq.${encodeURIComponent(botUserId)}&select=id,secret,access_token`,
+  // ลอง bot_user_id ก่อน
+  let res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
+    params: `bot_user_id=eq.${encodeURIComponent(destination)}&select=id,secret,access_token`,
+  });
+  if (res.ok) {
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) return data[0];
+  }
+  // fallback: ลอง line_channel_id (Channel ID จาก Basic settings)
+  res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
+    params: `line_channel_id=eq.${encodeURIComponent(destination)}&select=id,secret,access_token`,
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -274,7 +283,7 @@ async function healthHandler(c: Context<{ Bindings: Env }>) {
         name: ch.name,
         channel_id: ch.bot_user_id,
       })),
-      hint: "Channel ID ใน Settings ต้องตรงกับ destination ที่ LINE ส่ง (มักเป็นตัวเลขจาก Basic settings)",
+      hint: "destination ที่ LINE ส่ง ต้องตรงกับ channel_id - กด Verify ใน LINE Console แล้วดู Logs ใน Cloudflare Workers",
     });
   } catch (e) {
     return c.json({ ok: false, error: String(e) }, 500);
@@ -302,18 +311,21 @@ app.post("/webhook", async (c) => {
     return c.json({ ok: true }); // Verification or invalid
   }
 
-  const botUserId = body.destination;
+  const botUserId = body.destination != null ? String(body.destination) : "";
   if (!botUserId || !body.events?.length) {
+    if (botUserId) console.log("[webhook] Verify/test request, destination:", botUserId);
     return c.json({ ok: true });
   }
 
-  const channel = await getChannelByBotUserId(supabaseUrl, supabaseServiceKey, botUserId);
+  const channel = await getChannelByDestination(supabaseUrl, supabaseServiceKey, botUserId);
   if (!channel?.secret) {
+    console.error("[webhook] Channel not found for destination:", botUserId, "- ตรวจสอบว่า Channel ID ใน Settings ตรงกับ destination ที่ LINE ส่ง");
     return c.json({ ok: true }); // Unknown channel, accept to avoid retries
   }
 
   const isValid = await verifyLineSignature(rawBody, signature, channel.secret);
   if (!isValid) {
+    console.error("[webhook] Invalid signature for channel:", channel.id, "- ตรวจสอบ Channel Secret ใน Settings");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
