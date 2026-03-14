@@ -14,14 +14,18 @@ CREATE TABLE IF NOT EXISTS user_roles (
 
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 
--- RLS
+-- RLS (ใช้ get_my_role() เพื่อหลีกเลี่ยง infinite recursion)
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$ SELECT role FROM user_roles WHERE user_id = auth.uid() LIMIT 1; $$;
 
 DROP POLICY IF EXISTS "super_admin can manage user_roles" ON user_roles;
 CREATE POLICY "super_admin can manage user_roles"
   ON user_roles FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'super_admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'super_admin'));
+  USING (public.get_my_role() = 'super_admin')
+  WITH CHECK (public.get_my_role() = 'super_admin');
 
 DROP POLICY IF EXISTS "Users can read own role" ON user_roles;
 CREATE POLICY "Users can read own role"

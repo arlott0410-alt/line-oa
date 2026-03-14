@@ -19,6 +19,8 @@ supabase/migrations/20260314000000_add_image_support.sql
 
 **ถ้า Error 500 บน user_roles:** รัน `supabase/quick_fix_user_roles.sql` ใน SQL Editor ก่อน
 
+**ถ้า Error "infinite recursion detected in policy for relation user_roles":** รัน `supabase/migrations/20260314000001_fix_user_roles_rls_recursion.sql` ใน SQL Editor
+
 หรือใช้คำสั่ง:
 ```bash
 supabase db push
