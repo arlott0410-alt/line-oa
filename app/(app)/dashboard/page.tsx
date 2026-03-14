@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [showMyChatsOnly, setShowMyChatsOnly] = useState(false);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [canClaim, setCanClaim] = useState(false);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [adminStatus, setAdminStatus] = useState<"available" | "busy" | "offline">("offline");
@@ -262,6 +263,8 @@ export default function DashboardPage() {
           channelError={channelError}
           showMyChatsOnly={showMyChatsOnly}
           onMyChatsToggle={setShowMyChatsOnly}
+          showUnreadOnly={showUnreadOnly}
+          onUnreadToggle={setShowUnreadOnly}
           canClaim={canClaim}
           queueItems={queueItems}
           onClaim={handleClaim}

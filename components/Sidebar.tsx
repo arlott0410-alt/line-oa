@@ -29,6 +29,8 @@ interface SidebarProps {
   channelError?: string | null;
   showMyChatsOnly?: boolean;
   onMyChatsToggle?: (value: boolean) => void;
+  showUnreadOnly?: boolean;
+  onUnreadToggle?: (value: boolean) => void;
   canClaim?: boolean;
   queueItems?: QueueItem[];
   onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
@@ -48,6 +50,8 @@ export function Sidebar({
   channelError,
   showMyChatsOnly = false,
   onMyChatsToggle,
+  showUnreadOnly = false,
+  onUnreadToggle,
   canClaim = false,
   queueItems = [],
   onClaim,
@@ -67,7 +71,11 @@ export function Sidebar({
     }
     try {
       let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(selectedChannelId)}`;
-      if (showMyChatsOnly) url += "&assigned_to=me";
+      if (showUnreadOnly) {
+        url += "&assigned_to=me&unread_only=1";
+      } else if (showMyChatsOnly) {
+        url += "&assigned_to=me";
+      }
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
@@ -86,7 +94,7 @@ export function Sidebar({
       if (document.visibilityState === "visible") fetchChats();
     }, 45000);
     return () => clearInterval(interval);
-  }, [selectedChannelId, token, showMyChatsOnly]);
+  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly]);
 
   useEffect(() => {
     if (!selectedChannelId) return;
@@ -116,7 +124,7 @@ export function Sidebar({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedChannelId, token, showMyChatsOnly]);
+  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly]);
 
   return (
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">
@@ -179,17 +187,34 @@ export function Sidebar({
           <div className="mt-2 flex gap-1">
             <button
               type="button"
-              onClick={() => onMyChatsToggle(false)}
-              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${!showMyChatsOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
+              onClick={() => {
+                onMyChatsToggle(false);
+                onUnreadToggle?.(false);
+              }}
+              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
             >
               All
             </button>
             <button
               type="button"
-              onClick={() => onMyChatsToggle(true)}
-              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showMyChatsOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
+              onClick={() => {
+                onMyChatsToggle(true);
+                onUnreadToggle?.(false);
+              }}
+              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
             >
               My Chats
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onMyChatsToggle(true);
+                onUnreadToggle?.(true);
+              }}
+              className={`flex-1 rounded px-2 py-1 text-xs font-medium ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600"}`}
+              title="เฉพาะแชทที่ยังไม่ได้อ่าน"
+            >
+              Unread
             </button>
           </div>
         )}

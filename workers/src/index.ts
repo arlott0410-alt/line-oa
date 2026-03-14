@@ -600,10 +600,11 @@ app.get("/channels", async (c) => {
   return c.json(data);
 });
 
-// GET /chats?channel_id=xxx&assigned_to=me
+// GET /chats?channel_id=xxx&assigned_to=me&unread_only=1
 app.get("/chats", async (c) => {
   const channelId = c.req.query("channel_id");
   const assignedToMe = c.req.query("assigned_to") === "me";
+  const unreadOnly = c.req.query("unread_only") === "1";
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -623,8 +624,8 @@ app.get("/chats", async (c) => {
   const userId = userData.user?.id ?? userData.id;
   if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
 
-  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,last_message_content,last_message_timestamp,last_message_sender_type`;
-  if (assignedToMe) url += `&assigned_admin_id=eq.${userId}`;
+  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type`;
+  if (assignedToMe || unreadOnly) url += `&assigned_admin_id=eq.${userId}`;
 
   const res = await fetch(url, {
     headers: {
@@ -634,9 +635,20 @@ app.get("/chats", async (c) => {
   });
 
   if (!res.ok) return c.json({ error: "Failed to fetch chats" }, 500);
-  const users = await res.json();
+  let users = await res.json();
+  users = Array.isArray(users) ? users : [];
 
-  const usersWithLastMessage = (Array.isArray(users) ? users : []).map(
+  if (unreadOnly) {
+    const now = Date.now();
+    users = users.filter((u: { last_message_sender_type?: string; last_message_timestamp?: string; viewed_by_admin_at?: string | null }) => {
+      if (u.last_message_sender_type !== "user") return false;
+      const viewedAt = u.viewed_by_admin_at ? new Date(u.viewed_by_admin_at).getTime() : 0;
+      const lastMsgAt = u.last_message_timestamp ? new Date(u.last_message_timestamp).getTime() : 0;
+      return lastMsgAt > viewedAt;
+    });
+  }
+
+  const usersWithLastMessage = users.map(
     (u: {
       line_user_id: string;
       last_message_content?: string;
