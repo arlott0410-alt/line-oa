@@ -2,6 +2,8 @@
 
 ไปที่ **GitHub repo** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
+**หมายเหตุ:** GitHub Secrets ใช้สำหรับ build ใน CI เท่านั้น — จะไม่ทับ Variables/Secrets ที่ตั้งใน Cloudflare Dashboard
+
 เพิ่ม Secrets เหล่านี้:
 
 ## บังคับ (สำหรับ Deploy)

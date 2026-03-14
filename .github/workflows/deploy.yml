@@ -1,5 +1,8 @@
 name: Deploy to Cloudflare
 
+# Auto-deploy เมื่อ push ขึ้น main
+# หมายเหตุ: การ deploy จะไม่ทับ Variables/Secrets ที่ตั้งใน Cloudflare Dashboard
+
 on:
   push:
     branches: [main]
@@ -9,7 +12,6 @@ jobs:
   deploy-pages:
     name: Deploy Pages
     runs-on: ubuntu-latest
-    # Worker: deploy ผ่าน Dashboard ตาม DEPLOY_DASHBOARD.md
     steps:
       - uses: actions/checkout@v4
 

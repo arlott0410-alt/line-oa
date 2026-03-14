@@ -4,6 +4,17 @@
 
 ---
 
+## ⚠️ สิ่งสำคัญ: Variables และ Secrets
+
+**การ push โค้ดหรือ auto-deploy จะไม่ทับ Variables และ Secrets ที่ตั้งใน Dashboard**
+
+- **Worker**: Secrets เก็บแยกใน Cloudflare — การ deploy โค้ดใหม่จะไม่เปลี่ยนค่า
+- **Pages**: Environment variables ใน Dashboard จะไม่ถูก overwrite โดยการ deploy
+
+ค่าที่ตั้งใน Dashboard จะคงอยู่จนกว่าคุณจะแก้ไขเอง
+
+---
+
 ## สิ่งที่ต้องเตรียมก่อน
 
 1. สร้างโปรเจกต์ Supabase และรัน migrations
@@ -131,8 +142,11 @@ npm run build:worker
 
 ---
 
-## Auto Deploy จาก GitHub (Pages)
+## Auto Deploy จาก GitHub
 
-เมื่อเชื่อมต่อกับ GitHub แล้ว ทุกครั้งที่ **push** ขึ้น `main` Cloudflare จะ build และ deploy Pages ใหม่อัตโนมัติ
+เมื่อเชื่อมต่อกับ GitHub แล้ว ทุกครั้งที่ **push** ขึ้น `main`:
 
-**Worker** ต้อง deploy เองด้วยมือเมื่อมีการแก้ไข (ผ่าน Dashboard → Edit code)
+- **Pages**: Cloudflare จะ build และ deploy อัตโนมัติ (ถ้าเชื่อม Git ไว้ใน Dashboard)
+- **Worker**: จะ deploy อัตโนมัติ (ถ้าเชื่อม Git ไว้ใน Dashboard)
+
+**Variables และ Secrets ที่ตั้งใน Dashboard จะไม่ถูกทับ** — ค่าเดิมยังใช้ได้หลัง deploy ใหม่
