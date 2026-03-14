@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Search, Copy, ExternalLink, CheckCircle2, Radio } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Copy, ExternalLink, CheckCircle2, Radio, Share2 } from "lucide-react";
 import { fetchLineBotUserId } from "@/lib/api";
 
 const WEBHOOK_BASE = (
@@ -51,6 +51,12 @@ export default function SettingsPage() {
   const [qrTitle, setQrTitle] = useState("");
   const [qrContent, setQrContent] = useState("");
   const [qrTags, setQrTags] = useState("");
+  const [distConfig, setDistConfig] = useState<{
+    auto_assign: boolean;
+    use_skill_match: boolean;
+    strategy: "round_robin" | "manual_only";
+  } | null>(null);
+  const [distSaving, setDistSaving] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -85,10 +91,20 @@ export default function SettingsPage() {
     setQuickReplies(data || []);
   };
 
+  const fetchDistConfig = async () => {
+    const { data } = await supabase
+      .from("chat_distribution_config")
+      .select("auto_assign, use_skill_match, strategy")
+      .eq("id", "default")
+      .single();
+    if (data) setDistConfig(data as { auto_assign: boolean; use_skill_match: boolean; strategy: "round_robin" | "manual_only" });
+  };
+
   useEffect(() => {
     if (authorized) {
       fetchChannels();
       fetchQuickReplies();
+      fetchDistConfig();
     }
   }, [authorized]);
 
@@ -421,6 +437,113 @@ export default function SettingsPage() {
             </Table>
           )}
         </div>
+
+        {authorized && (
+          <div className="mt-12">
+            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              ตั้งค่าการกระจายแชท
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              ตั้งค่า logic ของการกระจายแชทเมื่อลูกค้าทักมา
+            </p>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm mb-12">
+              {distConfig === null ? (
+                <div className="py-4 text-center text-muted-foreground text-sm">กำลังโหลด...</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">กระจายอัตโนมัติ</p>
+                      <p className="text-xs text-muted-foreground">เมื่อลูกค้าทักมา แชทจะถูกกระจายให้สตาฟที่ว่างอัตโนมัติ</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={distConfig.auto_assign}
+                        onChange={(e) => setDistConfig((c) => c ? { ...c, auto_assign: e.target.checked } : c)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06C755]" />
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">ใช้ Skill Match</p>
+                      <p className="text-xs text-muted-foreground">กระจายตาม skill ของสตาฟ (ฝาก, ถอน, general) — ถ้าปิดจะกระจายให้ทุกคนที่ว่าง</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={distConfig.use_skill_match}
+                        onChange={(e) => setDistConfig((c) => c ? { ...c, use_skill_match: e.target.checked } : c)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06C755]" />
+                    </label>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 mb-2">วิธีกระจาย</p>
+                    <p className="text-xs text-muted-foreground mb-2">เลือกวิธีกระจายแชทให้สตาฟ</p>
+                    <div className="space-y-3">
+                      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="strategy"
+                          checked={distConfig.strategy === "round_robin"}
+                          onChange={() => setDistConfig((c) => c ? { ...c, strategy: "round_robin" } : c)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <span className="text-sm font-medium">Round Robin</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">กระจายตามลำดับ — ใครรับล่าสุดนานที่สุดจะได้แชทถัดไป</p>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="strategy"
+                          checked={distConfig.strategy === "manual_only"}
+                          onChange={() => setDistConfig((c) => c ? { ...c, strategy: "manual_only" } : c)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <span className="text-sm font-medium">Manual Only</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">ไม่กระจายอัตโนมัติ — สตาฟต้องไปรับแชทที่ Queue เอง</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (!distConfig) return;
+                      setDistSaving(true);
+                      const { error } = await supabase
+                        .from("chat_distribution_config")
+                        .update({
+                          auto_assign: distConfig.auto_assign,
+                          use_skill_match: distConfig.use_skill_match,
+                          strategy: distConfig.strategy,
+                          updated_at: new Date().toISOString(),
+                        })
+                        .eq("id", "default");
+                      setDistSaving(false);
+                      if (error) {
+                        toast.error(error.message);
+                        return;
+                      }
+                      toast.success("บันทึกการตั้งค่าแล้ว");
+                    }}
+                    disabled={distSaving}
+                    className="bg-[#06C755] hover:bg-[#05b04a]"
+                  >
+                    {distSaving ? "กำลังบันทึก..." : "บันทึก"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {authorized && (
           <div className="mt-12">

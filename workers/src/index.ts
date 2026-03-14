@@ -105,6 +105,25 @@ function autoTagFromContent(content: string): string[] {
   return tags;
 }
 
+interface ChatDistConfig {
+  auto_assign: boolean;
+  use_skill_match: boolean;
+  strategy: string;
+}
+
+async function getChatDistConfig(baseUrl: string, serviceKey: string): Promise<ChatDistConfig | null> {
+  const res = await fetch(
+    `${baseUrl}/rest/v1/chat_distribution_config?id=eq.default&select=auto_assign,use_skill_match,strategy`,
+    {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
+  return row as ChatDistConfig | null;
+}
+
 // Round-robin assign: pick available admin (role=admin/super_admin, status=available or unset)
 // Prefer skills match; order by last_assign_time ASC
 async function assignChatToAdmin(
@@ -112,8 +131,14 @@ async function assignChatToAdmin(
   serviceKey: string,
   lineUserId: string,
   channelId: string,
-  tags: string[]
+  tags: string[],
+  config?: ChatDistConfig | null
 ): Promise<void> {
+  const cfg = config ?? (await getChatDistConfig(baseUrl, serviceKey));
+  if (cfg) {
+    if (!cfg.auto_assign || cfg.strategy === "manual_only") return;
+  }
+
   // Get admin/super_admin user_ids
   const rolesRes = await fetch(
     `${baseUrl}/rest/v1/user_roles?role=in.(admin,super_admin)&select=user_id`,
@@ -156,11 +181,14 @@ async function assignChatToAdmin(
     skillsMap.get(s.user_id)!.push(s.skill);
   }
 
+  const useSkillMatch = cfg?.use_skill_match !== false;
   const tag = tags[0] || "general";
-  const withSkill = availableIds.filter((id) => {
-    const s = skillsMap.get(id) || [];
-    return s.includes(tag) || s.includes("general");
-  });
+  const withSkill = useSkillMatch
+    ? availableIds.filter((id) => {
+        const s = skillsMap.get(id) || [];
+        return s.includes(tag) || s.includes("general");
+      })
+    : availableIds;
   const candidates = withSkill.length > 0 ? withSkill : availableIds;
 
   // Round-robin by last_assign_time
@@ -352,6 +380,8 @@ app.post("/webhook", async (c) => {
   const imagesBucket = c.env.IMAGES_BUCKET;
   const r2PublicBase = c.env.R2_PUBLIC_BASE_URL as string | undefined;
 
+  const distConfig = await getChatDistConfig(supabaseUrl, supabaseServiceKey);
+
   for (const event of body.events) {
     if (event.type !== "message" || !event.message) continue;
     const userId = event.source?.userId;
@@ -475,7 +505,7 @@ app.post("/webhook", async (c) => {
         },
         body: JSON.stringify(lineUserBody),
       });
-      await assignChatToAdmin(supabaseUrl, supabaseServiceKey, userId, channelId, tags);
+      await assignChatToAdmin(supabaseUrl, supabaseServiceKey, userId, channelId, tags, distConfig);
     } else {
       const patchBody: Record<string, string> = { last_active: now };
       if (profileName) patchBody.profile_name = profileName;
