@@ -1,23 +1,36 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { getUserRole, type UserRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Settings, LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/users", label: "Users", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
+const ALL_NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "admin", "viewer"] as UserRole[] },
+  { href: "/users", label: "Users", icon: Users, roles: ["super_admin"] as UserRole[] },
+  { href: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"] as UserRole[] },
 ];
 
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [role, setRole] = useState<UserRole | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      getUserRole().then(setRole);
+    });
+  }, []);
+
+  const navItems = role
+    ? ALL_NAV_ITEMS.filter((item) => item.roles.includes(role))
+    : ALL_NAV_ITEMS.filter((item) => item.href === "/dashboard");
 
   return (
     <aside
@@ -68,6 +81,11 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="border-t border-border p-2">
+        {role && !collapsed && (
+          <div className="px-3 py-1 text-xs text-gray-500">
+            Role: <span className="font-medium text-gray-700">{role.replace("_", " ")}</span>
+          </div>
+        )}
         <Button
           variant="ghost"
           className={cn("w-full justify-start text-gray-600 hover:bg-gray-100 hover:text-gray-900", collapsed && "justify-center px-0")}

@@ -54,7 +54,10 @@ export default function SettingsPage() {
       }
       isSuperAdmin().then((ok) => {
         setAuthorized(ok);
-        if (!ok) router.replace("/dashboard");
+        if (!ok) {
+          toast.error("Access denied. Super Admin only.");
+          router.replace("/dashboard");
+        }
       });
     });
   }, [router]);

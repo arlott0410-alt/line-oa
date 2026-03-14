@@ -5,7 +5,7 @@ A production-ready MVP web app that aggregates all incoming chats from **multipl
 ## Features
 
 - **Multi-channel**: Add and manage multiple Line OA accounts via Settings
-- **Role-based access**: super_admin (manage channels/users), admin (manage chats), viewer (read-only)
+- **Role-based access**: 3 roles with clear permissions (see [Roles](#roles) below)
 - **Unified Dashboard**: Single-page view with channel selector
 - **Real-time Chat**: Supabase Realtime for instant message updates
 - **Line Webhook**: Routes by `destination` (bot_user_id), credentials stored in DB
@@ -39,6 +39,22 @@ line-oa/
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 - Supabase account
 - Line Official Account with Messaging API enabled
+
+---
+
+## Roles
+
+| Role | Dashboard | Users | Settings | Send messages |
+|------|-----------|-------|----------|---------------|
+| **super_admin** | ✓ | ✓ | ✓ | ✓ |
+| **admin** | ✓ | — | — | ✓ |
+| **viewer** | ✓ | — | — | — (read-only) |
+
+- **super_admin**: Full access. Manage users, channels, and all chat features.
+- **admin**: Dashboard and chat only. Can reply to messages and view chats.
+- **viewer**: Dashboard and chat only. Read-only (no reply).
+
+The sidebar shows only the pages you can access. Admin and viewer users will not see Users or Settings links.
 
 ---
 

@@ -1,10 +1,22 @@
 /**
  * Role-based access helpers for LineUnifiedInbox
+ *
+ * Roles (3 total):
+ * - super_admin: Users, Settings, Dashboard, send messages
+ * - admin: Dashboard, send messages
+ * - viewer: Dashboard, read-only
  */
 
 import { supabase } from "./supabase";
 
 export type UserRole = "super_admin" | "admin" | "viewer";
+
+/** หน้าไหนให้ role ไหนเข้าได้ */
+export const ROLE_PAGE_ACCESS: Record<UserRole, string[]> = {
+  super_admin: ["/dashboard", "/users", "/settings"],
+  admin: ["/dashboard"],
+  viewer: ["/dashboard"],
+};
 
 export async function getUserRole(): Promise<UserRole | null> {
   try {
