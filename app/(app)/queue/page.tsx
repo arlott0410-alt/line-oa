@@ -74,7 +74,7 @@ export default function QueuePage() {
     if (session && authorized) fetchQueue();
     const interval = setInterval(() => {
       if (document.visibilityState === "visible" && session) fetchQueue();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [session, authorized]);
 

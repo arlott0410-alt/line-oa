@@ -78,17 +78,10 @@ async function getChannelByDestination(
   serviceKey: string,
   destination: string
 ): Promise<{ id: string; secret: string; access_token: string } | null> {
-  // ลอง bot_user_id ก่อน
-  let res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
-    params: `bot_user_id=eq.${encodeURIComponent(destination)}&select=id,secret,access_token`,
-  });
-  if (res.ok) {
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) return data[0];
-  }
-  // fallback: ลอง line_channel_id (Channel ID จาก Basic settings)
-  res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
-    params: `line_channel_id=eq.${encodeURIComponent(destination)}&select=id,secret,access_token`,
+  // 1 query แทน 2: ลองทั้ง bot_user_id และ line_channel_id พร้อมกัน
+  const enc = encodeURIComponent(destination);
+  const res = await supabaseFetch(baseUrl, serviceKey, "/channels", {
+    params: `or=(bot_user_id.eq.${enc},line_channel_id.eq.${enc})&select=id,secret,access_token`,
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -1104,7 +1097,7 @@ app.get("/admin/metrics", async (c) => {
   }
 
   const msgRes = await fetch(
-    `${supabaseUrl}/rest/v1/messages?select=channel_id,line_user_id,sender_type,timestamp&order=timestamp.asc`,
+    `${supabaseUrl}/rest/v1/messages?select=channel_id,line_user_id,sender_type,timestamp&order=timestamp.asc&limit=50000`,
     {
       headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
     }

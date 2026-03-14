@@ -129,7 +129,7 @@ export default function DashboardPage() {
       fetchAdminStatus();
       const interval = setInterval(() => {
         if (document.visibilityState === "visible") fetchQueue();
-      }, 45000);
+      }, 90000);
       return () => clearInterval(interval);
     }
   }, [canClaim, session]);
@@ -168,9 +168,9 @@ export default function DashboardPage() {
           setSelectedChat(remaining.chat);
         } else {
           setActiveTabId(null);
-          setSelectedChannelId(null);
           setSelectedUserId(null);
           setSelectedChat(null);
+          // ไม่ clear selectedChannelId — เพื่อให้ Sidebar ยังแสดงรายการแชทใน channel เดิม
         }
       }
       return next;
@@ -320,6 +320,18 @@ export default function DashboardPage() {
                   .eq("assigned_admin_id", currentUserId);
               }}
               showEscalation={canClaim}
+              onResolve={
+                canClaim && selectedChannelId && selectedUserId
+                  ? (chId, uId) => {
+                      const tabId = `${chId}-${uId}`;
+                      closeTab(tabId);
+                      if (selectedUserId === uId && selectedChannelId === chId) {
+                        setSelectedUserId(null);
+                        setSelectedChat(null);
+                      }
+                    }
+                  : undefined
+              }
               onClaim={
                 canClaim && currentUserId
                   ? async (chId, uId) => {
@@ -408,6 +420,14 @@ export default function DashboardPage() {
                         .eq("assigned_admin_id", currentUserId);
                     }}
                     showEscalation={canClaim}
+                    onResolve={
+                      canClaim
+                        ? (chId, uId) => {
+                            const tabId = `${chId}-${uId}`;
+                            closeTab(tabId);
+                          }
+                        : undefined
+                    }
                     onClaim={
                       canClaim && currentUserId
                         ? async (chId, uId) => {

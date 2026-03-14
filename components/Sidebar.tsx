@@ -93,7 +93,7 @@ export function Sidebar({
     fetchChats();
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") fetchChats();
-    }, 45000);
+    }, 90000);
     return () => clearInterval(interval);
   }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly]);
 

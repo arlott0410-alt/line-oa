@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { sendReply, uploadImage } from "@/lib/api";
 import { QuickReplies } from "@/components/QuickReplies";
 import { EscalationDialog } from "@/components/EscalationDialog";
-import { ArrowUpCircle } from "lucide-react";
+import { ArrowUpCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { canSendMessages } from "@/lib/auth";
 import {
@@ -85,6 +85,8 @@ interface ChatPanelProps {
   showEscalation?: boolean;
   /** Call when user claims an unassigned chat */
   onClaim?: (channelId: string, lineUserId: string) => void;
+  /** Call when user resolves/closes a case — removes from My Chats */
+  onResolve?: (channelId: string, lineUserId: string) => void;
 }
 
 export function ChatPanel({
@@ -99,6 +101,7 @@ export function ChatPanel({
   onMarkViewed,
   showEscalation = false,
   onClaim,
+  onResolve,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -328,6 +331,29 @@ export function ChatPanel({
             lineUserId={selectedUserId}
             currentAdminId={currentAdminId}
           />
+        )}
+        {onResolve && showEscalation && currentAdminId && selectedChannelId && selectedUserId && selectedChat?.assigned_admin_id === currentAdminId && (
+          <button
+            type="button"
+            onClick={async () => {
+              const { error } = await supabase
+                .from("line_users")
+                .update({ queue_status: "resolved", assigned_admin_id: null })
+                .eq("channel_id", selectedChannelId)
+                .eq("line_user_id", selectedUserId);
+              if (error) {
+                toast.error(error.message);
+                return;
+              }
+              toast.success("จบเคสแล้ว — แชทจะหายจาก รับไว้แล้ว");
+              onResolve(selectedChannelId, selectedUserId);
+            }}
+            className="shrink-0 flex items-center gap-1.5 rounded bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            title="จบเคส — เอาแชทออกจาก รับไว้แล้ว"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            จบเคส
+          </button>
         )}
         <button
           type="button"
