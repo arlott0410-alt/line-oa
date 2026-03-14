@@ -105,7 +105,9 @@ export default function DashboardPage() {
     if (canClaim && session) {
       fetchQueue();
       fetchAdminStatus();
-      const interval = setInterval(fetchQueue, 10000);
+      const interval = setInterval(() => {
+        if (document.visibilityState === "visible") fetchQueue();
+      }, 45000);
       return () => clearInterval(interval);
     }
   }, [canClaim, session]);

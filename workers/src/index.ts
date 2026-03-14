@@ -381,25 +381,9 @@ app.post("/webhook", async (c) => {
       continue;
     }
 
-    // ดึง profile จาก LINE (displayName, pictureUrl)
-    let profileName: string | null = null;
-    let avatarUrl: string | null = null;
-    try {
-      const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-        headers: { Authorization: `Bearer ${channel.access_token}` },
-      });
-      if (profileRes.ok) {
-        const profile = (await profileRes.json()) as { displayName?: string; pictureUrl?: string };
-        profileName = profile.displayName || null;
-        avatarUrl = profile.pictureUrl || null;
-      }
-    } catch {
-      /* ignore */
-    }
-
     // Upsert line_user: PATCH if exists, else INSERT (with auto-tag + assign for new)
     const checkRes = await fetch(
-      `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&select=id,queue_status`,
+      `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&select=id,queue_status,profile_name`,
       {
         headers: {
           apikey: supabaseServiceKey,
@@ -409,6 +393,25 @@ app.post("/webhook", async (c) => {
     );
     const existing = await checkRes.json();
     const isNewChat = !Array.isArray(existing) || existing.length === 0;
+    const existingProfile = Array.isArray(existing) && existing.length > 0 ? existing[0] : null;
+
+    // ดึง profile จาก LINE เฉพาะเมื่อยังไม่มี (ลดการเรียก LINE API)
+    let profileName: string | null = null;
+    let avatarUrl: string | null = null;
+    if (!existingProfile?.profile_name) {
+      try {
+        const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+          headers: { Authorization: `Bearer ${channel.access_token}` },
+        });
+        if (profileRes.ok) {
+          const profile = (await profileRes.json()) as { displayName?: string; pictureUrl?: string };
+          profileName = profile.displayName || null;
+          avatarUrl = profile.pictureUrl || null;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
 
     if (isNewChat) {
       const tags = autoTagFromContent(content);
@@ -579,35 +582,35 @@ app.get("/chats", async (c) => {
   const userId = userData.user?.id ?? userData.id;
   if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
 
-  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id`;
+  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,last_message_content,last_message_timestamp,last_message_sender_type`;
   if (assignedToMe) url += `&assigned_admin_id=eq.${userId}`;
 
-  const res = await fetch(
-    url,
-    {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  const res = await fetch(url, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
   if (!res.ok) return c.json({ error: "Failed to fetch chats" }, 500);
-  let users = await res.json();
+  const users = await res.json();
 
-  const usersWithLastMessage = await Promise.all(
-    users.map(async (u: { line_user_id: string }) => {
-      const msgRes = await fetch(
-        `${supabaseUrl}/rest/v1/messages?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(u.line_user_id)}&order=timestamp.desc&limit=1&select=content,timestamp,sender_type`,
-        {
-          headers: {
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const msgs = msgRes.ok ? await msgRes.json() : [];
-      return { ...u, last_message: msgs[0] || null };
+  const usersWithLastMessage = (Array.isArray(users) ? users : []).map(
+    (u: {
+      line_user_id: string;
+      last_message_content?: string;
+      last_message_timestamp?: string;
+      last_message_sender_type?: string;
+    }) => ({
+      ...u,
+      last_message:
+        u.last_message_content != null
+          ? {
+              content: u.last_message_content,
+              timestamp: u.last_message_timestamp,
+              sender_type: u.last_message_sender_type || "user",
+            }
+          : null,
     })
   );
 
@@ -641,7 +644,7 @@ app.get("/queue", async (c) => {
   if (!["super_admin", "admin"].includes(role)) return c.json({ error: "Admin required" }, 403);
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.unassigned&select=id,line_user_id,profile_name,channel_id,last_active,tags&order=last_active.desc`,
+    `${supabaseUrl}/rest/v1/line_users?queue_status=eq.unassigned&select=id,line_user_id,profile_name,channel_id,last_active,tags,last_message_content,last_message_timestamp&order=last_active.desc`,
     {
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
     }
@@ -658,20 +661,20 @@ app.get("/queue", async (c) => {
   const channels = channelsRes.ok ? await channelsRes.json() : [];
   const channelMap = new Map((channels as { id: string; name: string }[]).map((ch) => [ch.id, ch.name]));
 
-  const withChannelAndMessage = await Promise.all(
-    (items as { id: string; line_user_id: string; channel_id: string }[]).map(async (u) => {
-      const msgRes = await fetch(
-        `${supabaseUrl}/rest/v1/messages?channel_id=eq.${u.channel_id}&line_user_id=eq.${encodeURIComponent(u.line_user_id)}&order=timestamp.desc&limit=1&select=content,timestamp`,
-        {
-          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
-        }
-      );
-      const msgs = msgRes.ok ? await msgRes.json() : [];
-      return {
-        ...u,
-        channel_name: channelMap.get(u.channel_id) || "—",
-        last_message: msgs[0] || null,
-      };
+  const withChannelAndMessage = (Array.isArray(items) ? items : []).map(
+    (u: {
+      id: string;
+      line_user_id: string;
+      channel_id: string;
+      last_message_content?: string;
+      last_message_timestamp?: string;
+    }) => ({
+      ...u,
+      channel_name: channelMap.get(u.channel_id) || "—",
+      last_message:
+        u.last_message_content != null
+          ? { content: u.last_message_content, timestamp: u.last_message_timestamp }
+          : null,
     })
   );
 

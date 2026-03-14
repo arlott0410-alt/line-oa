@@ -80,7 +80,9 @@ export function Sidebar({
   useEffect(() => {
     setLoading(true);
     fetchChats();
-    const interval = setInterval(fetchChats, 15000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchChats();
+    }, 45000);
     return () => clearInterval(interval);
   }, [selectedChannelId, token, showMyChatsOnly]);
 
