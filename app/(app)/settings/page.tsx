@@ -316,7 +316,7 @@ export default function SettingsPage() {
               <TableHeader>
                 <TableRow className="border-b border-gray-200 bg-gray-50/80 hover:bg-transparent">
                   <TableHead className="font-semibold text-gray-900">Name</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Bot User ID</TableHead>
+                  <TableHead className="font-semibold text-gray-900">Channel ID</TableHead>
                   <TableHead className="w-[120px] font-semibold text-gray-900 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>

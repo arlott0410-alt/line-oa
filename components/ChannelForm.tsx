@@ -36,7 +36,7 @@ export function ChannelForm({
     e.preventDefault();
     setError("");
     if (!name.trim() || !botUserId.trim()) {
-      setError("Name and Bot User ID are required");
+      setError("Name and Channel ID are required");
       return;
     }
     if (!channel && (!accessToken.trim() || !secret.trim())) {
@@ -71,17 +71,17 @@ export function ChannelForm({
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">Bot User ID</label>
+        <label className="block text-sm font-medium text-gray-700">Channel ID</label>
         <input
           type="text"
           value={botUserId}
           onChange={(e) => setBotUserId(e.target.value)}
           className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-600 font-mono text-sm placeholder-gray-400"
-          placeholder="2009440014"
+          placeholder="2009440045"
           disabled={!!channel}
         />
         <p className="mt-1 text-xs text-gray-500">
-          From LINE Developers Console → Messaging API
+          จาก LINE Developers Console → Basic settings (ตัวเลข Channel ID)
         </p>
       </div>
       <div>

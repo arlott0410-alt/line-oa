@@ -99,13 +99,13 @@ supabase db push
 3. Get:
    - **Channel Access Token** (long-lived)
    - **Channel Secret**
-   - **Bot User ID** (Messaging API tab, under "Bot basic ID" or from webhook `destination`)
+   - **Channel ID** (Basic settings tab, ตัวเลข เช่น 2009440045)
 
 ### Add Channel via Settings (after first login)
 
 1. Log in as **super_admin**
 2. Go to **Settings** → **Add Channel**
-3. Fill: Name, Bot User ID, Access Token, Secret
+3. Fill: Name, Channel ID (จาก Basic settings), Access Token, Secret
 4. Configure webhook in Line Console: `https://YOUR-WORKER-URL/webhook`
 
 ### Multi-OA Setup (Shared Webhook)
@@ -271,7 +271,7 @@ INSERT INTO user_roles (user_id, role) VALUES ('YOUR_USER_UUID', 'super_admin');
 ```
 
 5. Log in at your deployed app
-6. Go to **Settings** → **Add Channel** to add your first Line OA (Bot User ID from Line Console)
+6. Go to **Settings** → **Add Channel** to add your first Line OA (Channel ID from Basic settings)
 
 ### Option B: User Management UI (after first super_admin)
 

@@ -116,8 +116,9 @@ async function assignChatToAdmin(
   if (adminUserIds.length === 0) return;
 
   // Get admin_status: available or not present (treat as available)
+  const idsForFilter = adminUserIds.map((id) => `"${id}"`).join(",");
   const statusRes = await fetch(
-    `${baseUrl}/rest/v1/admin_status?user_id=in.(${adminUserIds.join(",")})&select=user_id,last_assign_time,status`,
+    `${baseUrl}/rest/v1/admin_status?user_id=in.(${idsForFilter})&select=user_id,last_assign_time,status`,
     {
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
     }
@@ -130,8 +131,9 @@ async function assignChatToAdmin(
   if (availableIds.length === 0) return;
 
   // Get skills
+  const availIdsForFilter = availableIds.map((id) => `"${id}"`).join(",");
   const skillsRes = await fetch(
-    `${baseUrl}/rest/v1/admin_skills?user_id=in.(${availableIds.join(",")})&select=user_id,skill`,
+    `${baseUrl}/rest/v1/admin_skills?user_id=in.(${availIdsForFilter})&select=user_id,skill`,
     {
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
     }
@@ -246,6 +248,9 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// GET /webhook - LINE may use for URL verification; return 200
+app.get("/webhook", (c) => c.json({ ok: true }));
 
 // POST /webhook - Line webhook (route by destination = bot_user_id)
 app.post("/webhook", async (c) => {
@@ -380,13 +385,15 @@ app.post("/webhook", async (c) => {
       );
     }
 
-    // Insert message
+    // Insert message (use event timestamp for ordering)
+    const eventTs = event.timestamp ? new Date(event.timestamp).toISOString() : now;
     const messageBody: Record<string, unknown> = {
       channel_id: channelId,
       line_user_id: userId,
       sender_type: "user",
       content,
       message_id: messageId,
+      timestamp: eventTs,
     };
     if (imageOriginalUrl) messageBody.image_original_url = imageOriginalUrl;
     if (imagePreviewUrl) messageBody.image_preview_url = imagePreviewUrl;
