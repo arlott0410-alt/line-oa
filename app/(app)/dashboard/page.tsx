@@ -23,6 +23,7 @@ export interface ChatUser {
   channel_id?: string;
   tags?: string[] | null;
   assigned_admin_id?: string | null;
+  assigned_admin_display_name?: string | null;
   last_message?: {
     content: string;
     timestamp: string;

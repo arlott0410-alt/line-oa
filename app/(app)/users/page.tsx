@@ -8,6 +8,7 @@ import {
   fetchAdminUsers,
   createAdminUser,
   updateAdminUserRole,
+  updateAdminUserPassword,
   deleteAdminUser,
   fetchAdminMetrics,
   type AdminUser,
@@ -32,7 +33,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, KeyRound } from "lucide-react";
 
 const ROLES = ["super_admin", "admin", "viewer"] as const;
 const SKILLS = ["deposit", "withdrawal", "general"] as const;
@@ -57,6 +58,9 @@ export default function UsersPage() {
   const [editSkills, setEditSkills] = useState<string[]>([]);
   const [editStatus, setEditStatus] = useState<string>("offline");
   const [submitting, setSubmitting] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -147,6 +151,29 @@ export default function UsersPage() {
       toast.success("User updated");
       setEditOpen(null);
       fetchUsers();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChangePassword = async (uid: string) => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      return;
+    }
+    if (newPassword !== passwordConfirm) {
+      toast.error("รหัสผ่านไม่ตรงกัน");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updateAdminUserPassword(uid, newPassword);
+      toast.success("เปลี่ยนรหัสผ่านสำเร็จ");
+      setPasswordOpen(null);
+      setNewPassword("");
+      setPasswordConfirm("");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -433,6 +460,22 @@ export default function UsersPage() {
                                   </div>
                                 </>
                               )}
+                              <div className="pt-2 border-t">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setPasswordOpen(u.id);
+                                    setNewPassword("");
+                                    setPasswordConfirm("");
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                  เปลี่ยนรหัสผ่าน
+                                </Button>
+                              </div>
                             </div>
                             <DialogFooter>
                               <Button
@@ -446,6 +489,57 @@ export default function UsersPage() {
                                 disabled={submitting}
                               >
                                 {submitting ? "Saving..." : "Save"}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Dialog
+                          open={passwordOpen === u.id}
+                          onOpenChange={(o) =>
+                            o ? setPasswordOpen(u.id) : setPasswordOpen(null)
+                          }
+                        >
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>เปลี่ยนรหัสผ่าน</DialogTitle>
+                            </DialogHeader>
+                            <p className="text-sm text-muted-foreground">
+                              เปลี่ยนรหัสผ่านสำหรับ {u.email}
+                            </p>
+                            <div className="space-y-4">
+                              <div>
+                                <Label>รหัสผ่านใหม่</Label>
+                                <Input
+                                  type="password"
+                                  value={newPassword}
+                                  onChange={(e) => setNewPassword(e.target.value)}
+                                  placeholder="อย่างน้อย 6 ตัวอักษร"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label>ยืนยันรหัสผ่าน</Label>
+                                <Input
+                                  type="password"
+                                  value={passwordConfirm}
+                                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                                  placeholder="ใส่รหัสผ่านอีกครั้ง"
+                                  className="mt-1"
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                variant="outline"
+                                onClick={() => setPasswordOpen(null)}
+                              >
+                                ยกเลิก
+                              </Button>
+                              <Button
+                                onClick={() => handleChangePassword(u.id)}
+                                disabled={submitting}
+                              >
+                                {submitting ? "กำลังเปลี่ยน..." : "เปลี่ยนรหัสผ่าน"}
                               </Button>
                             </DialogFooter>
                           </DialogContent>

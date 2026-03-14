@@ -69,6 +69,7 @@ interface ChatUserInfo {
   avatar: string | null;
   channel_id?: string;
   assigned_admin_id?: string | null;
+  assigned_admin_display_name?: string | null;
 }
 
 interface ChatPanelProps {
@@ -327,9 +328,16 @@ export function ChatPanel({
               {(selectedChat?.profile_name || selectedUserId)?.slice(-2).toUpperCase()}
             </div>
           )}
-          <h3 className="font-medium text-gray-900 truncate">
-            {selectedChat?.profile_name || `User ${selectedUserId?.slice(-8) || ""}`}
-          </h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-medium text-gray-900 truncate">
+              {selectedChat?.profile_name || `User ${selectedUserId?.slice(-8) || ""}`}
+            </h3>
+            {selectedChat?.assigned_admin_id && (
+              <p className="text-xs text-muted-foreground truncate" title="คนรับแชท">
+                รับโดย: {selectedChat.assigned_admin_display_name || "—"}
+              </p>
+            )}
+          </div>
         </div>
         {showEscalation && currentAdminId && selectedChannelId && selectedUserId && (
           <EscalationTrigger

@@ -159,7 +159,22 @@ export async function updateAdminUserRole(uid: string, role: string) {
     method: "PATCH",
     body: JSON.stringify({ role }),
   });
-  if (!res.ok) throw new Error("Failed to update role");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.detail?.message || "Failed to update role");
+  }
+  return res.json();
+}
+
+export async function updateAdminUserPassword(uid: string, password: string) {
+  const res = await fetchWithAuth(`${WORKER_URL}/admin/users/${uid}/password`, {
+    method: "PATCH",
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update password");
+  }
   return res.json();
 }
 

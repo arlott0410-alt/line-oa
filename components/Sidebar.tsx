@@ -308,6 +308,11 @@ export function Sidebar({
                     <p className={`truncate text-xs ${selectedUserId === chat.line_user_id ? "text-white/80" : "text-gray-500"}`}>
                       {chat.last_message?.content || "No messages"}
                     </p>
+                    {chat.assigned_admin_display_name && (
+                      <p className={`truncate text-[10px] mt-0.5 ${selectedUserId === chat.line_user_id ? "text-white/70" : "text-gray-400"}`}>
+                        รับโดย: {chat.assigned_admin_display_name}
+                      </p>
+                    )}
                   </div>
                 </button>
               </li>

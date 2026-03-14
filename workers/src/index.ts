@@ -698,14 +698,32 @@ app.get("/chats", async (c) => {
     });
   }
 
+  const assignedIds = [...new Set((users as { assigned_admin_id?: string | null }[]).map((u) => u.assigned_admin_id).filter(Boolean))] as string[];
+  let profileMap = new Map<string, string>();
+  if (assignedIds.length > 0) {
+    const idsFilter = assignedIds.map((id) => `"${id}"`).join(",");
+    const profilesRes = await fetch(
+      `${supabaseUrl}/rest/v1/admin_profiles?user_id=in.(${idsFilter})&select=user_id,display_name`,
+      {
+        headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+      }
+    );
+    if (profilesRes.ok) {
+      const profiles = await profilesRes.json();
+      profileMap = new Map((profiles as { user_id: string; display_name: string | null }[]).map((p) => [p.user_id, p.display_name || ""]));
+    }
+  }
+
   const usersWithLastMessage = users.map(
     (u: {
       line_user_id: string;
+      assigned_admin_id?: string | null;
       last_message_content?: string;
       last_message_timestamp?: string;
       last_message_sender_type?: string;
     }) => ({
       ...u,
+      assigned_admin_display_name: u.assigned_admin_id ? profileMap.get(u.assigned_admin_id) || null : null,
       last_message:
         u.last_message_content != null
           ? {
@@ -1312,7 +1330,7 @@ app.post("/admin/users", async (c) => {
 // PATCH /admin/users/:uid/role - Update role (super_admin only)
 app.patch("/admin/users/:uid/role", async (c) => {
   const supabaseUrl = c.env.SUPABASE_URL as string;
-  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const uid = c.req.param("uid");
   const authHeader = c.req.header("Authorization");
 
@@ -1334,20 +1352,71 @@ app.patch("/admin/users/:uid/role", async (c) => {
     return c.json({ error: "Invalid role" }, 400);
   }
 
-  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  // Use upsert so it works even if user_roles row doesn't exist yet
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${uid}`,
+    `${supabaseUrl}/rest/v1/user_roles?on_conflict=user_id`,
     {
-      method: "PATCH",
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: supabaseServiceKey,
         Authorization: `Bearer ${supabaseServiceKey}`,
+        Prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ user_id: uid, role }),
     }
   );
-  if (!res.ok) return c.json({ error: "Failed to update role" }, 500);
+  if (!res.ok) {
+    const errText = await res.text();
+    let errJson: unknown;
+    try {
+      errJson = JSON.parse(errText);
+    } catch {
+      errJson = { message: errText };
+    }
+    return c.json({ error: "Failed to update role", detail: errJson }, 500);
+  }
+  return c.json({ ok: true });
+});
+
+// PATCH /admin/users/:uid/password - Change user password (super_admin only)
+app.patch("/admin/users/:uid/password", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const uid = c.req.param("uid");
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseServiceKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  let body: { password: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const { password } = body;
+  if (!password || typeof password !== "string" || password.length < 6) {
+    return c.json({ error: "Password must be at least 6 characters" }, 400);
+  }
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${uid}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+    },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    return c.json({ error: err.msg || err.error_description || "Failed to update password" }, 400);
+  }
   return c.json({ ok: true });
 });
 
