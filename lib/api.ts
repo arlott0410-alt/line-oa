@@ -58,20 +58,46 @@ export async function fetchMessages(channelId: string, userId: string) {
   return res.json();
 }
 
+/** อัปโหลดรูปเพื่อส่งให้ลูกค้า - คืนค่า URL สำหรับใช้กับ sendReply */
+export async function uploadImage(channelId: string, file: File): Promise<string> {
+  const { supabase } = await import("./supabase");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not authenticated");
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("channel_id", channelId);
+
+  const res = await fetch(`${WORKER_URL}/upload-image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to upload image");
+  }
+  const data = await res.json();
+  return data.url;
+}
+
 export async function sendReply(
   channelId: string,
   lineUserId: string,
-  content: string
+  content: string,
+  imageUrl?: string
 ) {
   const headers = await getAuthHeaders();
+  const body: { channel_id: string; line_user_id: string; content?: string; image_url?: string } = {
+    channel_id: channelId,
+    line_user_id: lineUserId,
+  };
+  if (content) body.content = content;
+  if (imageUrl) body.image_url = imageUrl;
   const res = await fetch(`${WORKER_URL}/reply`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      channel_id: channelId,
-      line_user_id: lineUserId,
-      content,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to send reply");
   return res.json();

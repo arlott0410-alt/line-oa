@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { sendReply } from "@/lib/api";
+import { sendReply, uploadImage } from "@/lib/api";
 import { toast } from "sonner";
 import { canSendMessages } from "@/lib/auth";
 import {
@@ -60,9 +60,11 @@ export function ChatPanel({
   const [imageModalUrl, setImageModalUrl] = useState<string | null>(null);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const offsetRef = useRef(0);
   offsetRef.current = offset;
 
@@ -159,21 +161,55 @@ export function ChatPanel({
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !selectedChannelId || !input.trim() || sending || !canReply)
-      return;
     const content = input.trim();
+    if ((!content && !pendingImage) || !selectedUserId || !selectedChannelId || sending || !canReply)
+      return;
     setInput("");
+    const imageToSend = pendingImage;
+    setPendingImage(null);
     setSending(true);
     setError("");
     try {
-      await sendReply(selectedChannelId, selectedUserId, content);
+      let imageUrl: string | undefined;
+      if (imageToSend && selectedChannelId) {
+        imageUrl = await uploadImage(selectedChannelId, imageToSend);
+      }
+      await sendReply(selectedChannelId, selectedUserId, content || "", imageUrl);
       await fetchMessages(true);
     } catch (err) {
       setError((err as Error).message);
       setInput(content);
+      if (imageToSend) setPendingImage(imageToSend);
     } finally {
       setSending(false);
     }
+  };
+
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingImage) {
+      const url = URL.createObjectURL(pendingImage);
+      setPendingImagePreview(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPendingImagePreview(null);
+  }, [pendingImage]);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setError("รองรับเฉพาะไฟล์ JPEG, PNG, GIF, WebP");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("รูปใหญ่เกิน 10MB");
+      return;
+    }
+    setError("");
+    setPendingImage(file);
+    e.target.value = "";
   };
 
   if (!selectedChannelId) {
@@ -355,24 +391,63 @@ export function ChatPanel({
 
       <form
         onSubmit={handleSend}
-        className="flex gap-2 border-t border-border p-4"
+        className="flex flex-col gap-2 border-t border-border p-4"
       >
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-          disabled={sending || !canReply}
-        />
-        <Button
-          type="submit"
-          disabled={sending || !input.trim() || !canReply}
-          className="bg-[#06C755] hover:bg-[#05b04a]"
-        >
-          Send
-        </Button>
+        {pendingImage && pendingImagePreview && (
+          <div className="flex items-center gap-2">
+            <img
+              src={pendingImagePreview}
+              alt="Preview"
+              className="h-16 w-16 object-cover rounded-lg border"
+            />
+            <span className="text-sm text-muted-foreground truncate flex-1">{pendingImage.name}</span>
+            <button
+              type="button"
+              onClick={() => setPendingImage(null)}
+              className="text-red-500 hover:text-red-700 text-sm"
+            >
+              ลบ
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || !canReply}
+            className="shrink-0 p-2 rounded-lg border border-input hover:bg-muted disabled:opacity-50"
+            title="ส่งรูป"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+              <circle cx="9" cy="9" r="2"/>
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+            </svg>
+          </button>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="พิมพ์ข้อความหรือส่งรูป..."
+            className="flex-1 rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            disabled={sending || !canReply}
+          />
+          <Button
+            type="submit"
+            disabled={sending || (!input.trim() && !pendingImage) || !canReply}
+            className="bg-[#06C755] hover:bg-[#05b04a] shrink-0"
+          >
+            ส่ง
+          </Button>
+        </div>
       </form>
     </main>
   );

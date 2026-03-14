@@ -762,7 +762,58 @@ app.get("/messages/:userId", async (c) => {
   return c.json(messages);
 });
 
-// POST /reply - Require channel_id, get access_token from DB
+// POST /upload-image - อัปโหลดรูปสำหรับส่งให้ลูกค้า (auth required)
+app.post("/upload-image", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = authHeader.slice(7);
+  const { error: authError } = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((r) => r.json());
+  if (authError) return c.json({ error: "Invalid token" }, 401);
+
+  const bucket = c.env.IMAGES_BUCKET as R2Bucket | undefined;
+  if (!bucket) return c.json({ error: "R2 not configured" }, 503);
+
+  let formData: FormData;
+  try {
+    formData = await c.req.formData();
+  } catch {
+    return c.json({ error: "Invalid form data" }, 400);
+  }
+  const file = formData.get("file") as File | null;
+  const channelId = formData.get("channel_id") as string | null;
+  if (!file || !channelId) return c.json({ error: "file and channel_id required" }, 400);
+
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    return c.json({ error: "Invalid file type. Use JPEG, PNG, GIF or WebP" }, 400);
+  }
+  if (file.size > 10 * 1024 * 1024) return c.json({ error: "File too large (max 10MB)" }, 400);
+
+  const ext = file.type === "image/png" ? "png" : file.type === "image/gif" ? "gif" : file.type === "image/webp" ? "webp" : "jpg";
+  const key = `outbound/${channelId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    await bucket.put(key, arrayBuffer, {
+      httpMetadata: { contentType: file.type },
+    });
+  } catch (err) {
+    console.error("Image upload failed:", err);
+    return c.json({ error: "Upload failed" }, 500);
+  }
+
+  const r2PublicBase = c.env.R2_PUBLIC_BASE_URL as string | undefined;
+  const url = r2PublicBase
+    ? `${r2PublicBase.replace(/\/$/, "")}/${key}`
+    : `${new URL(c.req.url).origin}/r2/${key}`;
+
+  return c.json({ url });
+});
+
+// POST /reply - Require channel_id, get access_token from DB (รองรับ text และ/หรือ image)
 app.post("/reply", async (c) => {
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
@@ -780,16 +831,19 @@ app.post("/reply", async (c) => {
 
   if (authError) return c.json({ error: "Invalid token" }, 401);
 
-  let body: { channel_id: string; line_user_id: string; content: string };
+  let body: { channel_id: string; line_user_id: string; content?: string; image_url?: string };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON" }, 400);
   }
 
-  const { channel_id, line_user_id, content } = body;
-  if (!channel_id || !line_user_id || !content) {
-    return c.json({ error: "channel_id, line_user_id and content required" }, 400);
+  const { channel_id, line_user_id, content, image_url } = body;
+  if (!channel_id || !line_user_id) {
+    return c.json({ error: "channel_id and line_user_id required" }, 400);
+  }
+  if (!content && !image_url) {
+    return c.json({ error: "content or image_url required" }, 400);
   }
 
   // Get channel access_token
@@ -809,6 +863,10 @@ app.post("/reply", async (c) => {
     return c.json({ error: "Channel not found or missing credentials" }, 400);
   }
 
+  const lineMessages: Array<{ type: "text"; text: string } | { type: "image"; originalContentUrl: string; previewImageUrl: string }> = [];
+  if (content) lineMessages.push({ type: "text", text: content });
+  if (image_url) lineMessages.push({ type: "image", originalContentUrl: image_url, previewImageUrl: image_url });
+
   const lineRes = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -817,7 +875,7 @@ app.post("/reply", async (c) => {
     },
     body: JSON.stringify({
       to: line_user_id,
-      messages: [{ type: "text", text: content }],
+      messages: lineMessages,
     }),
   });
   if (!lineRes.ok) {
@@ -845,6 +903,17 @@ app.post("/reply", async (c) => {
   }).catch(() => {});
 
   // Insert admin message
+  const msgContent = content || (image_url ? "[Image]" : "");
+  const messageBody: Record<string, unknown> = {
+    channel_id,
+    line_user_id,
+    sender_type: "admin",
+    content: msgContent,
+  };
+  if (image_url) {
+    messageBody.image_original_url = image_url;
+    messageBody.image_preview_url = image_url;
+  }
   await fetch(`${supabaseUrl}/rest/v1/messages`, {
     method: "POST",
     headers: {
@@ -853,12 +922,7 @@ app.post("/reply", async (c) => {
       Authorization: `Bearer ${supabaseServiceKey}`,
       Prefer: "return=minimal",
     },
-    body: JSON.stringify({
-      channel_id,
-      line_user_id,
-      sender_type: "admin",
-      content,
-    }),
+    body: JSON.stringify(messageBody),
   });
 
   return c.json({ ok: true });
