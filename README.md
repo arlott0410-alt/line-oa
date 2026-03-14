@@ -230,7 +230,9 @@ If you use a custom domain, update the CORS `origin` function in `workers/src/in
 
 ---
 
-## 6. Create Admin User & Set Role
+## 6. Create First Admin User & Set Role
+
+### Option A: Manual (first super_admin)
 
 1. In Supabase Dashboard → **Authentication** → **Users**
 2. Click **Add user** → **Create new user** (email + password)
@@ -243,6 +245,13 @@ INSERT INTO user_roles (user_id, role) VALUES ('YOUR_USER_UUID', 'super_admin');
 
 5. Log in at your deployed app
 6. Go to **Settings** → **Add Channel** to add your first Line OA (Bot User ID from Line Console)
+
+### Option B: User Management UI (after first super_admin)
+
+Once logged in as **super_admin**, go to **Users** in the sidebar to:
+- Add new users (email, password, role)
+- Edit user roles
+- Delete users
 
 ---
 

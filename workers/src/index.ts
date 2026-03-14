@@ -84,6 +84,36 @@ async function getChannelByBotUserId(
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
+async function requireSuperAdmin(
+  supabaseUrl: string,
+  anonKey: string,
+  token: string
+): Promise<{ ok: true } | { ok: false; status: number; body: object }> {
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const userData = await userRes.json();
+  const userId = userData.user?.id ?? userData.id;
+  if (userData.error || !userId) {
+    return { ok: false, status: 401, body: { error: "Invalid token" } };
+  }
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  const roles = await rolesRes.json();
+  const role = Array.isArray(roles) && roles.length > 0 ? roles[0]?.role : null;
+  if (role !== "super_admin") {
+    return { ok: false, status: 403, body: { error: "super_admin required" } };
+  }
+  return { ok: true };
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
@@ -100,7 +130,7 @@ app.use(
         return origin;
       return "http://localhost:3000";
     },
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -343,10 +373,12 @@ app.get("/chats", async (c) => {
   return c.json(usersWithLastMessage);
 });
 
-// GET /messages/:userId?channel_id=xxx
+// GET /messages/:userId?channel_id=xxx&limit=50&offset=0
 app.get("/messages/:userId", async (c) => {
   const userId = c.req.param("userId");
   const channelId = c.req.query("channel_id");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10) || 50, 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10) || 0;
   const supabaseUrl = c.env.SUPABASE_URL as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -365,8 +397,9 @@ app.get("/messages/:userId", async (c) => {
 
   if (authError) return c.json({ error: "Invalid token" }, 401);
 
+  const params = `channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type&limit=${limit}&offset=${offset}`;
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/messages?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type`,
+    `${supabaseUrl}/rest/v1/messages?${params}`,
     {
       headers: {
         apikey: supabaseAnonKey,
@@ -479,6 +512,190 @@ app.post("/reply", async (c) => {
     }),
   });
 
+  return c.json({ ok: true });
+});
+
+// --- Admin routes (super_admin only) ---
+
+// GET /admin/users - List users with roles
+app.get("/admin/users", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+    headers: {
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+    },
+  });
+  if (!authRes.ok) {
+    const err = await authRes.text();
+    return c.json({ error: "Failed to list users" }, 500);
+  }
+  const authData = await authRes.json();
+  const users = authData.users || [];
+
+  const rolesRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?select=user_id,role`,
+    {
+      headers: {
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`,
+      },
+    }
+  );
+  const rolesList = rolesRes.ok ? await rolesRes.json() : [];
+  const roleMap = new Map(rolesList.map((r: { user_id: string; role: string }) => [r.user_id, r.role]));
+
+  const result = users.map((u: { id: string; email?: string; created_at?: string; last_sign_in_at?: string }) => ({
+    id: u.id,
+    email: u.email || "",
+    role: roleMap.get(u.id) || "viewer",
+    created_at: u.created_at,
+    last_sign_in_at: u.last_sign_in_at,
+  }));
+
+  return c.json(result);
+});
+
+// POST /admin/users - Create user (super_admin only)
+app.post("/admin/users", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  let body: { email: string; password: string; role: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const { email, password, role } = body;
+  if (!email || !password || !role) {
+    return c.json({ error: "email, password and role required" }, 400);
+  }
+  if (!["super_admin", "admin", "viewer"].includes(role)) {
+    return c.json({ error: "Invalid role" }, 400);
+  }
+
+  const createRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      email_confirm: true,
+    }),
+  });
+  const createData = await createRes.json();
+  if (createData.error) {
+    return c.json({ error: createData.msg || createData.error_description || "Failed to create user" }, 400);
+  }
+  const newUserId = createData.user?.id ?? createData.id;
+
+  await fetch(`${supabaseUrl}/rest/v1/user_roles`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ user_id: newUserId, role }),
+  });
+
+  return c.json({ id: newUserId, email, role });
+});
+
+// PATCH /admin/users/:uid/role - Update role (super_admin only)
+app.patch("/admin/users/:uid/role", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const uid = c.req.param("uid");
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  let body: { role: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const { role } = body;
+  if (!role || !["super_admin", "admin", "viewer"].includes(role)) {
+    return c.json({ error: "Invalid role" }, 400);
+  }
+
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?user_id=eq.${uid}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({ role }),
+    }
+  );
+  if (!res.ok) return c.json({ error: "Failed to update role" }, 500);
+  return c.json({ ok: true });
+});
+
+// DELETE /admin/users/:uid - Delete user (super_admin only)
+app.delete("/admin/users/:uid", async (c) => {
+  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const uid = c.req.param("uid");
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7);
+  const authCheck = await requireSuperAdmin(supabaseUrl, supabaseAnonKey, token);
+  if (!authCheck.ok) return c.json(authCheck.body, authCheck.status);
+
+  const delRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${uid}`, {
+    method: "DELETE",
+    headers: {
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+    },
+  });
+  if (!delRes.ok) {
+    const err = await delRes.json();
+    return c.json({ error: err.msg || "Failed to delete user" }, 400);
+  }
   return c.json({ ok: true });
 });
 

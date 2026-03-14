@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import type { ChatUser, Channel } from "@/app/dashboard/page";
+import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
 
@@ -25,7 +23,6 @@ export function Sidebar({
   onSelectUser,
   token,
 }: SidebarProps) {
-  const router = useRouter();
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -81,28 +78,9 @@ export function Sidebar({
   return (
     <aside className="flex w-80 flex-col border-r border-slate-800 bg-slate-900/50">
       <div className="border-b border-slate-800 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">LineUnifiedInbox</h2>
-            <p className="text-xs text-slate-400">Line users</p>
-          </div>
-          <div className="flex gap-1">
-            <Link
-              href="/settings"
-              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-            >
-              Settings
-            </Link>
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.replace("/login");
-              }}
-              className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-            >
-              Logout
-            </button>
-          </div>
+        <div>
+          <h2 className="text-lg font-semibold text-white">Chats</h2>
+          <p className="text-xs text-slate-400">Line users</p>
         </div>
         {channels.length > 0 && (
           <select

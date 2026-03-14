@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
+import { OnboardingModal } from "@/components/OnboardingModal";
+import { Button } from "@/components/ui/button";
 
 export interface ChatUser {
   id: string;
@@ -32,6 +35,7 @@ export default function DashboardPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -56,6 +60,9 @@ export default function DashboardPage() {
         if (data.length > 0 && !selectedChannelId) {
           setSelectedChannelId(data[0].id);
         }
+        if (data.length === 0) {
+          setShowOnboarding(true);
+        }
       }
     };
     fetchChannels();
@@ -64,26 +71,32 @@ export default function DashboardPage() {
   if (!session) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-gray-500">Loading...</div>
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950">
-      <Sidebar
-        selectedUserId={selectedUserId}
-        selectedChannelId={selectedChannelId}
-        channels={channels}
-        onSelectChannel={setSelectedChannelId}
-        onSelectUser={setSelectedUserId}
-        token={session.access_token}
+    <>
+      <OnboardingModal
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
       />
-      <ChatPanel
-        selectedUserId={selectedUserId}
-        selectedChannelId={selectedChannelId}
-        token={session.access_token}
-      />
-    </div>
+      <div className="flex h-full overflow-hidden bg-background">
+        <Sidebar
+          selectedUserId={selectedUserId}
+          selectedChannelId={selectedChannelId}
+          channels={channels}
+          onSelectChannel={setSelectedChannelId}
+          onSelectUser={setSelectedUserId}
+          token={session.access_token}
+        />
+        <ChatPanel
+          selectedUserId={selectedUserId}
+          selectedChannelId={selectedChannelId}
+          token={session.access_token}
+        />
+      </div>
+    </>
   );
 }

@@ -63,3 +63,61 @@ export async function sendReply(
   if (!res.ok) throw new Error("Failed to send reply");
   return res.json();
 }
+
+// Admin user management (super_admin only)
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  created_at?: string;
+  last_sign_in_at?: string;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${WORKER_URL}/admin/users`, { headers });
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
+export async function createAdminUser(
+  email: string,
+  password: string,
+  role: string
+) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${WORKER_URL}/admin/users`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ email, password, role }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to create user");
+  }
+  return res.json();
+}
+
+export async function updateAdminUserRole(uid: string, role: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${WORKER_URL}/admin/users/${uid}/role`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ role }),
+  });
+  if (!res.ok) throw new Error("Failed to update role");
+  return res.json();
+}
+
+export async function deleteAdminUser(uid: string) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${WORKER_URL}/admin/users/${uid}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to delete user");
+  }
+  return res.json();
+}
