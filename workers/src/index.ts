@@ -294,16 +294,23 @@ app.get("/channels", async (c) => {
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
 
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("channels: Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+    return c.json({ error: "Server config error" }, 500);
+  }
+
   if (!authHeader?.startsWith("Bearer ")) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   const token = authHeader.slice(7);
-  const { error: authError } = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { Authorization: `Bearer ${token}` },
-  }).then((r) => r.json());
-
-  if (authError) return c.json({ error: "Invalid token" }, 401);
+  });
+  const authData = await authRes.json();
+  if (authData.error) {
+    return c.json({ error: "Invalid token" }, 401);
+  }
 
   const res = await fetch(
     `${supabaseUrl}/rest/v1/channels?select=id,name,bot_user_id&order=name.asc`,
@@ -315,7 +322,14 @@ app.get("/channels", async (c) => {
     }
   );
 
-  if (!res.ok) return c.json({ error: "Failed to fetch channels" }, 500);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("channels: Supabase REST error", res.status, errText);
+    return c.json(
+      { error: "Failed to fetch channels", detail: errText.slice(0, 200) },
+      500
+    );
+  }
   const data = await res.json();
   return c.json(data);
 });
