@@ -282,7 +282,7 @@ export function Sidebar({
               : "ยังไม่มีแชท — ลูกค้าส่งข้อความมาจะปรากฏที่นี่"}
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="space-y-2 p-3">
             {chats.map((chat) => (
               <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
@@ -290,10 +290,10 @@ export function Sidebar({
                     onSelectUser(chat.line_user_id);
                     onSelectChat?.(chat);
                   }}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                  className={`flex w-full items-center gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all duration-200 ${
                     selectedUserId === chat.line_user_id
-                      ? "bg-[#06C755] text-white"
-                      : "text-gray-700 hover:bg-gray-50"
+                      ? "border-[#06C755] bg-[#06C755] text-white shadow-md"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
                   }`}
                 >
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
