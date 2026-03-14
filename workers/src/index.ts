@@ -381,6 +381,22 @@ app.post("/webhook", async (c) => {
       continue;
     }
 
+    // ดึง profile จาก LINE (displayName, pictureUrl)
+    let profileName: string | null = null;
+    let avatarUrl: string | null = null;
+    try {
+      const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+        headers: { Authorization: `Bearer ${channel.access_token}` },
+      });
+      if (profileRes.ok) {
+        const profile = (await profileRes.json()) as { displayName?: string; pictureUrl?: string };
+        profileName = profile.displayName || null;
+        avatarUrl = profile.pictureUrl || null;
+      }
+    } catch {
+      /* ignore */
+    }
+
     // Upsert line_user: PATCH if exists, else INSERT (with auto-tag + assign for new)
     const checkRes = await fetch(
       `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&select=id,queue_status`,
@@ -396,6 +412,15 @@ app.post("/webhook", async (c) => {
 
     if (isNewChat) {
       const tags = autoTagFromContent(content);
+      const lineUserBody: Record<string, unknown> = {
+        channel_id: channelId,
+        line_user_id: userId,
+        last_active: now,
+        tags,
+        queue_status: "unassigned",
+      };
+      if (profileName) lineUserBody.profile_name = profileName;
+      if (avatarUrl) lineUserBody.avatar = avatarUrl;
       await fetch(`${supabaseUrl}/rest/v1/line_users`, {
         method: "POST",
         headers: {
@@ -404,16 +429,13 @@ app.post("/webhook", async (c) => {
           Authorization: `Bearer ${supabaseServiceKey}`,
           Prefer: "return=minimal",
         },
-        body: JSON.stringify({
-          channel_id: channelId,
-          line_user_id: userId,
-          last_active: now,
-          tags,
-          queue_status: "unassigned",
-        }),
+        body: JSON.stringify(lineUserBody),
       });
       await assignChatToAdmin(supabaseUrl, supabaseServiceKey, userId, channelId, tags);
     } else {
+      const patchBody: Record<string, string> = { last_active: now };
+      if (profileName) patchBody.profile_name = profileName;
+      if (avatarUrl) patchBody.avatar = avatarUrl;
       await fetch(
         `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}`,
         {
@@ -423,7 +445,7 @@ app.post("/webhook", async (c) => {
             apikey: supabaseServiceKey,
             Authorization: `Bearer ${supabaseServiceKey}`,
           },
-          body: JSON.stringify({ last_active: now }),
+          body: JSON.stringify(patchBody),
         }
       );
     }

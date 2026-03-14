@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendReply } from "@/lib/api";
+import { toast } from "sonner";
 import { canSendMessages } from "@/lib/auth";
 import {
   Dialog,
@@ -25,16 +26,27 @@ interface Message {
   mime_type?: string | null;
 }
 
+interface ChatUserInfo {
+  line_user_id: string;
+  profile_name: string | null;
+  avatar: string | null;
+  channel_id?: string;
+}
+
 interface ChatPanelProps {
   selectedUserId: string | null;
   selectedChannelId: string | null;
+  selectedChat: ChatUserInfo | null;
   token: string;
+  onProfileUpdated?: (profileName: string) => void;
 }
 
 export function ChatPanel({
   selectedUserId,
   selectedChannelId,
+  selectedChat,
   token,
+  onProfileUpdated,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -46,6 +58,8 @@ export function ChatPanel({
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [imageModalUrl, setImageModalUrl] = useState<string | null>(null);
+  const [editNameOpen, setEditNameOpen] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -192,11 +206,69 @@ export function ChatPanel({
         </DialogContent>
       </Dialog>
 
-      <div className="border-b border-gray-200 bg-white px-4 py-3">
-        <h3 className="font-medium text-gray-900">
-          User {selectedUserId.slice(-8)}
-        </h3>
+      <div className="border-b border-gray-200 bg-white px-4 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {selectedChat?.avatar ? (
+            <img src={selectedChat.avatar} alt="" className="h-9 w-9 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600 shrink-0">
+              {(selectedChat?.profile_name || selectedUserId)?.slice(-2).toUpperCase()}
+            </div>
+          )}
+          <h3 className="font-medium text-gray-900 truncate">
+            {selectedChat?.profile_name || `User ${selectedUserId?.slice(-8) || ""}`}
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setEditNameValue(selectedChat?.profile_name || "");
+            setEditNameOpen(true);
+          }}
+          className="shrink-0 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          title="แก้ไขชื่อ"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
       </div>
+      <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
+        <DialogContent className="sm:max-w-md">
+          <h4 className="font-medium">แก้ไขชื่อลูกค้า</h4>
+          <input
+            type="text"
+            value={editNameValue}
+            onChange={(e) => setEditNameValue(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2"
+            placeholder="ชื่อลูกค้า"
+          />
+          <div className="flex gap-2 mt-4 justify-end">
+            <Button variant="outline" onClick={() => setEditNameOpen(false)}>ยกเลิก</Button>
+            <Button
+              className="bg-[#06C755] hover:bg-[#05b04a]"
+              onClick={async () => {
+                if (!selectedChannelId || !selectedUserId || editNameValue.trim() === selectedChat?.profile_name) {
+                  setEditNameOpen(false);
+                  return;
+                }
+                const { error } = await supabase
+                  .from("line_users")
+                  .update({ profile_name: editNameValue.trim() })
+                  .eq("channel_id", selectedChannelId)
+                  .eq("line_user_id", selectedUserId);
+                if (error) {
+                  toast.error(error.message);
+                  return;
+                }
+                toast.success("บันทึกแล้ว");
+                onProfileUpdated?.(editNameValue.trim());
+                setEditNameOpen(false);
+              }}
+            >
+              บันทึก
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div
         ref={scrollRef}

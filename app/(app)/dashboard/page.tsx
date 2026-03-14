@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<ChatUser | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -118,7 +119,7 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel); };
   }, [canClaim, session]);
 
-  const handleClaim = async (lineUserId: string, channelId: string) => {
+  const handleClaim = async (lineUserId: string, channelId: string, queueItem?: QueueItem) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase
@@ -133,6 +134,18 @@ export default function DashboardPage() {
     toast.success("รับแชทแล้ว");
     setSelectedChannelId(channelId);
     setSelectedUserId(lineUserId);
+    setSelectedChat(
+      queueItem
+        ? {
+            id: queueItem.id,
+            line_user_id: queueItem.line_user_id,
+            profile_name: queueItem.profile_name,
+            avatar: null,
+            last_active: queueItem.last_active,
+            channel_id: queueItem.channel_id,
+          }
+        : null
+    );
     fetchQueue();
   };
 
@@ -170,8 +183,16 @@ export default function DashboardPage() {
           selectedUserId={selectedUserId}
           selectedChannelId={selectedChannelId}
           channels={channels}
-          onSelectChannel={setSelectedChannelId}
-          onSelectUser={setSelectedUserId}
+          onSelectChannel={(id) => {
+            setSelectedChannelId(id);
+            setSelectedUserId(null);
+            setSelectedChat(null);
+          }}
+          onSelectUser={(id) => {
+            setSelectedUserId(id);
+            if (!id) setSelectedChat(null);
+          }}
+          onSelectChat={setSelectedChat}
           token={session.access_token}
           channelError={channelError}
           showMyChatsOnly={showMyChatsOnly}
@@ -185,7 +206,11 @@ export default function DashboardPage() {
         <ChatPanel
           selectedUserId={selectedUserId}
           selectedChannelId={selectedChannelId}
+          selectedChat={selectedChat}
           token={session.access_token}
+          onProfileUpdated={(name) =>
+            setSelectedChat((c) => (c ? { ...c, profile_name: name } : null))
+          }
         />
       </div>
     </>

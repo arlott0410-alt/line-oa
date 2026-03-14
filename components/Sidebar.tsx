@@ -24,13 +24,14 @@ interface SidebarProps {
   channels: Channel[];
   onSelectChannel: (channelId: string) => void;
   onSelectUser: (userId: string | null) => void;
+  onSelectChat?: (chat: ChatUser | null) => void;
   token: string;
   channelError?: string | null;
   showMyChatsOnly?: boolean;
   onMyChatsToggle?: (value: boolean) => void;
   canClaim?: boolean;
   queueItems?: QueueItem[];
-  onClaim?: (lineUserId: string, channelId: string) => void;
+  onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
   adminStatus?: "available" | "busy" | "offline";
   onStatusChange?: (status: "available" | "busy" | "offline") => void;
 }
@@ -41,6 +42,7 @@ export function Sidebar({
   channels,
   onSelectChannel,
   onSelectUser,
+  onSelectChat,
   token,
   channelError,
   showMyChatsOnly = false,
@@ -85,13 +87,23 @@ export function Sidebar({
   useEffect(() => {
     if (!selectedChannelId) return;
     const channel = supabase
-      .channel(`sidebar-messages-${selectedChannelId}`)
+      .channel(`sidebar-updates-${selectedChannelId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "messages",
+          filter: `channel_id=eq.${selectedChannelId}`,
+        },
+        () => fetchChats()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "line_users",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
         () => fetchChats()
@@ -182,7 +194,7 @@ export function Sidebar({
                   </div>
                   <button
                     type="button"
-                    onClick={() => onClaim(q.line_user_id, q.channel_id)}
+                    onClick={() => onClaim(q.line_user_id, q.channel_id, q)}
                     className="shrink-0 rounded bg-[#06C755] px-2 py-1 text-xs font-medium text-white hover:bg-[#05b04a]"
                   >
                     รับ
@@ -221,7 +233,10 @@ export function Sidebar({
             {chats.map((chat) => (
               <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
-                  onClick={() => onSelectUser(chat.line_user_id)}
+                  onClick={() => {
+                    onSelectUser(chat.line_user_id);
+                    onSelectChat?.(chat);
+                  }}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
                     selectedUserId === chat.line_user_id
                       ? "bg-[#06C755] text-white"
