@@ -61,59 +61,59 @@ export function ChannelForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-300">Channel Name</label>
+        <label className="block text-sm font-medium text-gray-700">Channel Name</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white"
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           placeholder="My Line OA"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300">Bot User ID</label>
+        <label className="block text-sm font-medium text-gray-700">Bot User ID</label>
         <input
           type="text"
           value={botUserId}
           onChange={(e) => setBotUserId(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white"
-          placeholder="U1234567890abcdef..."
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-600 font-mono text-sm placeholder-gray-400"
+          placeholder="2009440014"
           disabled={!!channel}
         />
-        <p className="mt-1 text-xs text-slate-500">
-          From Line Developers Console → Messaging API. Used for webhook routing.
+        <p className="mt-1 text-xs text-gray-500">
+          From LINE Developers Console → Messaging API
         </p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300">
+        <label className="block text-sm font-medium text-gray-700">
           Channel Access Token {channel && "(leave blank to keep existing)"}
         </label>
         <input
           type="password"
           value={accessToken}
           onChange={(e) => setAccessToken(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white"
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           placeholder="••••••••"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300">
+        <label className="block text-sm font-medium text-gray-700">
           Channel Secret {channel && "(leave blank to keep existing)"}
         </label>
         <input
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white"
+          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           placeholder="••••••••"
         />
       </div>
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      <div className="flex gap-2">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex gap-2 pt-2">
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-[#06C755] px-4 py-2 text-white disabled:opacity-50"
+          className="rounded-lg bg-[#06C755] px-4 py-2 text-sm font-medium text-white hover:bg-[#05b04a] disabled:opacity-50"
         >
           {loading ? "Saving..." : channel ? "Update" : "Add Channel"}
         </button>
@@ -121,7 +121,7 @@ export function ChannelForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             Cancel
           </button>

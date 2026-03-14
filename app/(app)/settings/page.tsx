@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Search, Copy, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Copy, ExternalLink, CheckCircle2, Radio } from "lucide-react";
 
 const WEBHOOK_BASE = (
   process.env.NEXT_PUBLIC_WORKER_URL || "https://line-oa-worker.arlott0410.workers.dev"
@@ -170,26 +170,53 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-6 lg:p-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Channel Settings</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add and manage Line Official Account channels. Webhook URL:{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              {WEBHOOK_URL}
-            </code>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Channel Settings
+          </h1>
+          <p className="mt-1.5 text-sm text-gray-500">
+            Add and manage Line Official Account channels
           </p>
         </div>
 
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-[#06C755]/10 p-2">
+              <Radio className="h-5 w-5 text-[#06C755]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-gray-900">Webhook URL</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Use this URL in LINE Developers Console → Messaging API for all channels
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <code className="flex-1 truncate rounded-md bg-gray-50 px-3 py-2 text-xs font-medium text-gray-800">
+                  {WEBHOOK_URL}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyWebhook}
+                  className="shrink-0"
+                >
+                  <Copy className="mr-1.5 h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <Input
               placeholder="Search channels..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
+              className="w-full pl-9 sm:w-64"
             />
           </div>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -199,7 +226,7 @@ export default function SettingsPage() {
             </Button>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Add Channel</DialogTitle>
+                <DialogTitle className="text-lg">Add Channel</DialogTitle>
               </DialogHeader>
               <ChannelForm
                 onSubmit={handleAdd}
@@ -209,66 +236,97 @@ export default function SettingsPage() {
           </Dialog>
 
           <Dialog open={webhookModalOpen} onOpenChange={setWebhookModalOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Channel Saved Successfully!</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground">
-                Copy this Webhook URL and paste it into your Line OA&apos;s Messaging API settings in LINE Developers Console. The same URL is used for all channels—events are routed by bot_user_id.
-              </p>
-              <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <code className="flex-1 truncate text-sm text-gray-800">
-                  {WEBHOOK_URL}
-                </code>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyWebhook}
-                  className="shrink-0"
-                >
-                  <Copy className="mr-1 h-4 w-4" />
-                  Copy URL
-                </Button>
+            <DialogContent className="sm:max-w-lg">
+              <div className="flex items-start gap-4">
+                <div className="rounded-full bg-[#06C755]/10 p-2.5">
+                  <CheckCircle2 className="h-6 w-6 text-[#06C755]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg">Channel Saved Successfully</DialogTitle>
+                  </DialogHeader>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Copy the Webhook URL below and paste it into your Line OA&apos;s Messaging API settings in LINE Developers Console. The same URL is used for all channels.
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                    <code className="flex-1 truncate text-sm font-medium text-gray-800">
+                      {WEBHOOK_URL}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyWebhook}
+                      className="shrink-0"
+                    >
+                      <Copy className="mr-1.5 h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+                  <DialogFooter className="mt-6 gap-2 sm:gap-0">
+                    <a
+                      href="https://developers.line.biz/console/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <ExternalLink className="mr-1.5 h-4 w-4" />
+                      LINE Console
+                    </a>
+                    <Button onClick={() => setWebhookModalOpen(false)} className="bg-[#06C755] hover:bg-[#05b04a]">
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </div>
               </div>
-              <DialogFooter>
-                <a
-                  href="https://developers.line.biz/console/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-8 items-center justify-center rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted"
-                >
-                  <ExternalLink className="mr-1 h-4 w-4" />
-                  Go to LINE Console
-                </a>
-                <Button onClick={() => setWebhookModalOpen(false)} className="bg-[#06C755] hover:bg-[#05b04a]">
-                  Done
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {loading ? (
-            <div className="flex justify-center py-12 text-muted-foreground">
-              Loading...
+            <div className="flex justify-center py-16 text-gray-500">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#06C755] border-t-transparent" />
+                <span className="text-sm">Loading channels...</span>
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-full bg-gray-100 p-4">
+                <Radio className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="mt-4 text-sm font-medium text-gray-900">
+                {channels.length === 0 ? "No channels yet" : "No channels match your search"}
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {channels.length === 0 ? "Add your first Line OA to start receiving messages" : "Try a different search term"}
+              </p>
+              {channels.length === 0 && (
+                <Button
+                  onClick={() => setAddOpen(true)}
+                  className="mt-4 bg-[#06C755] hover:bg-[#05b04a]"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Channel
+                </Button>
+              )}
             </div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Bot User ID</TableHead>
-                  <TableHead className="w-[140px]">Actions</TableHead>
+                <TableRow className="border-b border-gray-200 bg-gray-50/80 hover:bg-transparent">
+                  <TableHead className="font-semibold text-gray-900">Name</TableHead>
+                  <TableHead className="font-semibold text-gray-900">Bot User ID</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-gray-900 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((ch) => (
-                  <TableRow key={ch.id}>
+                  <TableRow key={ch.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
                     {editingId === ch.id ? (
-                      <TableCell colSpan={3} className="p-4">
+                      <TableCell colSpan={3} className="bg-gray-50/50 p-6">
                         <div className="space-y-4">
-                          <h3 className="font-medium">Edit Channel</h3>
+                          <h3 className="text-sm font-semibold text-gray-900">Edit Channel</h3>
                           <ChannelForm
                             channel={ch}
                             onSubmit={(data) => handleUpdate(ch.id, data)}
@@ -278,16 +336,17 @@ export default function SettingsPage() {
                       </TableCell>
                     ) : (
                       <>
-                        <TableCell className="font-medium">{ch.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
+                        <TableCell className="font-medium text-gray-900">{ch.name}</TableCell>
+                        <TableCell className="font-mono text-sm text-gray-600">
                           {ch.bot_user_id}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-0.5">
                             <Button
                               variant="ghost"
                               size="icon-sm"
                               onClick={() => setEditingId(ch.id)}
+                              className="text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -301,17 +360,17 @@ export default function SettingsPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => setDeleteOpen(ch.id)}
+                                className="text-gray-500 hover:bg-red-50 hover:text-red-600"
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Delete Channel</DialogTitle>
-                                </DialogHeader>
-                                <p className="text-sm text-muted-foreground">
-                                  Delete {ch.name}? All related messages will be
-                                  removed.
-                                </p>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Delete Channel</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-gray-600">
+                  Delete <strong>{ch.name}</strong>? All related messages and data will be permanently removed.
+                </p>
                                 <DialogFooter>
                                   <Button
                                     variant="outline"

@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import type { QueueItem } from "@/app/(app)/queue/page";
+import type { QueueItem } from "@/components/Sidebar";
 import { UserPlus } from "lucide-react";
 
 interface QueueTableProps {

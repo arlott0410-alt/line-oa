@@ -2,9 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
+
+export interface QueueItem {
+  id: string;
+  line_user_id: string;
+  profile_name: string | null;
+  channel_id: string;
+  channel_name: string;
+  last_active: string;
+  tags: string[] | null;
+  last_message: { content: string; timestamp: string } | null;
+}
 
 interface SidebarProps {
   selectedUserId: string | null;
@@ -17,6 +29,10 @@ interface SidebarProps {
   showMyChatsOnly?: boolean;
   onMyChatsToggle?: (value: boolean) => void;
   canClaim?: boolean;
+  queueItems?: QueueItem[];
+  onClaim?: (lineUserId: string, channelId: string) => void;
+  adminStatus?: "available" | "busy" | "offline";
+  onStatusChange?: (status: "available" | "busy" | "offline") => void;
 }
 
 export function Sidebar({
@@ -30,6 +46,10 @@ export function Sidebar({
   showMyChatsOnly = false,
   onMyChatsToggle,
   canClaim = false,
+  queueItems = [],
+  onClaim,
+  adminStatus = "offline",
+  onStatusChange,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +104,32 @@ export function Sidebar({
 
   return (
     <aside className="flex w-80 flex-col border-r border-gray-200 bg-white">
-      <div className="border-b border-gray-200 p-4">
+      <div className="border-b border-gray-200 p-4 space-y-3">
+        {canClaim && onStatusChange && (
+          <div>
+            <p className="text-xs font-medium text-gray-600 mb-1">สถานะ</p>
+            <div className="flex gap-1">
+              {(["available", "busy", "offline"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onStatusChange(s)}
+                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium ${
+                    adminStatus === s
+                      ? s === "available"
+                        ? "bg-green-600 text-white"
+                        : s === "busy"
+                        ? "bg-amber-500 text-white"
+                        : "bg-gray-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {s === "available" ? "ว่าง" : s === "busy" ? "ไม่ว่าง" : "ออฟไลน์"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
           <p className="text-xs text-gray-500">Line users</p>
@@ -122,7 +167,31 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        {canClaim && queueItems.length > 0 && onClaim && (
+          <div className="border-b border-gray-200 p-3 bg-amber-50">
+            <p className="text-xs font-semibold text-amber-800 mb-2">คิวรอรับ ({queueItems.length})</p>
+            <ul className="space-y-1 max-h-32 overflow-y-auto">
+              {queueItems.map((q) => (
+                <li key={`${q.channel_id}-${q.line_user_id}`} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {q.profile_name || `User ${q.line_user_id.slice(-6)}`}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">{q.channel_name} · {q.last_message?.content || "—"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onClaim(q.line_user_id, q.channel_id)}
+                    className="shrink-0 rounded bg-[#06C755] px-2 py-1 text-xs font-medium text-white hover:bg-[#05b04a]"
+                  >
+                    รับ
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {channelError ? (
           <div className="space-y-2 p-4">
             <p className="text-center text-sm font-medium text-amber-600">
