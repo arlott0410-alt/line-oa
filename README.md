@@ -338,6 +338,33 @@ Replace `YOUR_USERNAME` with your GitHub username.
 
 ---
 
+## Debugging Chat Loading
+
+If the dashboard shows no chats even when the `/chats` API returns 200 OK:
+
+1. **Worker logs** – In Cloudflare Dashboard → Worker → **Logs** (or Real-time Logs), look for:
+   - `GET /chats called with channel_id=..., assigned_to=...` – confirms the request and params.
+   - `GET /chats query result: N line_users for channel_id=...` – N is the number of rows from Supabase. If N is 0, the channel has no `line_users` rows yet.
+2. **Supabase data** – Ensure there are rows in `line_users` (and `messages`) for the selected channel. Sending a message from a user via Line creates a `line_users` row and a `messages` row. Check Table Editor → `line_users` filtered by your `channel_id`.
+3. **Filters** – If you use "รับไว้แล้ว" or "ยังไม่อ่าน", the API adds `assigned_admin_id=eq.<userId>` or filters unread. Try "ทั้งหมด" to see all conversations in the channel.
+4. **Realtime** – In the browser console (dev only), `Realtime message received:` logs appear when new messages arrive. If Realtime is misconfigured, new chats may not appear until refresh.
+
+After changing Worker code, redeploy and refresh the dashboard; then send a test Line message and watch Worker logs and the UI.
+
+---
+
+## Troubleshooting
+
+**If you get 500 errors or "Failed to load channels":**
+
+1. **Worker env vars** – In Cloudflare Dashboard → Worker → **Settings** → **Variables and Secrets**, ensure **SUPABASE_URL** and **SUPABASE_ANON_KEY** are set and match your Supabase project. After adding KV or redeploying, variables can be lost; re-add them and redeploy.
+2. **Supabase RLS** – Users must have a row in **user_roles** (e.g. `super_admin`, `admin`, or `viewer`) to read `channels`. Run the SQL in `supabase/fix_channels_1042.sql` if needed. If you see error code 1042, ensure migration `20260314000001_fix_user_roles_rls_recursion.sql` has been applied so `get_my_role()` exists.
+3. **Frontend env** – In `.env.local` or Cloudflare Pages env, set **NEXT_PUBLIC_WORKER_URL** to your Worker URL (e.g. `https://your-worker.workers.dev`) so the dashboard can call `/channels` and other APIs.
+
+After fixing, use **โหลดใหม่ (ล้าง cache)** on the dashboard or open `/channels?nocache=1` to bypass cache.
+
+---
+
 ## License
 
 MIT

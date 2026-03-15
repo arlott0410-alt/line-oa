@@ -58,6 +58,7 @@ export default function DashboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [chatsByChannel, setChatsByChannel] = useState<Record<string, ChatUser[]>>({});
   const [allChannelsLoading, setAllChannelsLoading] = useState(false);
+  const [channelsLoading, setChannelsLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,6 +87,7 @@ export default function DashboardPage() {
   const loadChannelsAndMaybeChats = useCallback(async (options?: { nocache?: boolean }) => {
     if (!session) return;
     setChannelError(null);
+    setChannelsLoading(true);
     const lastChannelId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_LAST_CHANNEL) : null;
     const ops: Array<{ method: "get_channels"; nocache?: boolean } | { method: "get_chats"; channel_id: string }> = [
       { method: "get_channels", ...(options?.nocache ? { nocache: true } : {}) },
@@ -105,6 +107,7 @@ export default function DashboardPage() {
         }
         setChannelError(msg);
         setChannels([]);
+        toast.error("Failed to load channels: " + msg);
         return;
       }
       const channelsData = Array.isArray(first) ? first : [];
@@ -122,6 +125,9 @@ export default function DashboardPage() {
     } catch (err) {
       const msg = (err as Error).message;
       setChannelError(msg);
+      toast.error("Failed to load channels: " + msg);
+    } finally {
+      setChannelsLoading(false);
     }
   }, [session]);
 
@@ -129,6 +135,14 @@ export default function DashboardPage() {
     if (!session) return;
     loadChannelsAndMaybeChats();
   }, [session]);
+
+  useEffect(() => {
+    if (channels?.length > 0 && !selectedChannelId) {
+      const firstId = channels[0].id;
+      setSelectedChannelId(firstId);
+      if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, firstId);
+    }
+  }, [channels, selectedChannelId]);
 
   const loadAllChannelsChats = useCallback(async () => {
     if (!session || channels.length === 0) return;
@@ -306,6 +320,7 @@ export default function DashboardPage() {
           }}
           chatsByChannel={selectedChannelId === ALL_CHANNELS_ID ? chatsByChannel : undefined}
           allChannelsLoading={allChannelsLoading}
+          channelsLoading={channelsLoading}
           selectedChat={selectedChat}
           onSelectUser={(id) => {
             setSelectedUserId(id);

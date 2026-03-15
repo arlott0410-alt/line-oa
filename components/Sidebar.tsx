@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { fetchChats } from "@/lib/api";
 import debounce from "lodash/debounce";
-import { CircleDot, Clock, CircleOff } from "lucide-react";
+import { CircleDot, Clock, CircleOff, MessageCircle } from "lucide-react";
+import { toast } from "sonner";
+import Link from "next/link";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 export interface QueueItem {
@@ -27,6 +29,7 @@ interface SidebarProps {
   /** เมื่อเลือก "ทั้งหมดทุก LINE" จะส่ง object แชทแยกตาม channel_id */
   chatsByChannel?: Record<string, ChatUser[]>;
   allChannelsLoading?: boolean;
+  channelsLoading?: boolean;
   /** แชทที่กำลังเลือก (ใช้ไฮไลต์ในโหมดทั้งหมดทุก LINE) */
   selectedChat?: ChatUser | null;
   onSelectChannel: (channelId: string) => void;
@@ -53,6 +56,7 @@ export function Sidebar({
   channels,
   chatsByChannel,
   allChannelsLoading = false,
+  channelsLoading = false,
   selectedChat,
   onSelectChannel,
   onSelectUser,
@@ -88,9 +92,11 @@ export function Sidebar({
         assignedToMe: showMyChatsOnly || showUnreadOnly,
         unreadOnly: showUnreadOnly,
       });
-      setChats(data);
+      setChats(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast.error("Failed to load chats: " + msg);
     } finally {
       setLoading(false);
     }
@@ -123,7 +129,10 @@ export function Sidebar({
           table: "messages",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        loadChats
+        (payload) => {
+          console.log("New message via realtime:", payload);
+          loadChats();
+        }
       )
       .on(
         "postgres_changes",
@@ -133,9 +142,14 @@ export function Sidebar({
           table: "line_users",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        loadChats
+        (payload) => {
+          console.log("New message via realtime (line_users):", payload);
+          loadChats();
+        }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === "CHANNEL_ERROR" && err) toast.error("Realtime error: " + (err?.message ?? String(err)));
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -294,14 +308,25 @@ export function Sidebar({
               </p>
             )}
           </div>
+        ) : channelsLoading && channels.length === 0 ? (
+          <div className="p-4 text-center text-gray-500 flex flex-col items-center gap-2">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#06C755] border-t-transparent" />
+            <p className="text-sm">Loading channels...</p>
+          </div>
         ) : !selectedChannelId ? (
-          <div className="p-4 text-center text-gray-500 space-y-2">
-            <p>No channel selected. Add one in Settings.</p>
+          <div className="p-4 text-center text-gray-500 space-y-3">
+            <p className="text-sm">No channel selected. Add a Line OA in Settings to see chats.</p>
+            <Link
+              href="/settings"
+              className="inline-block rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
+            >
+              ไปที่ Settings
+            </Link>
             {onRefreshChannels && (
               <button
                 type="button"
                 onClick={onRefreshChannels}
-                className="text-xs text-green-600 hover:underline"
+                className="block w-full mt-2 text-xs text-gray-500 hover:underline"
               >
                 โหลดใหม่ (ล้าง cache)
               </button>
@@ -322,7 +347,10 @@ export function Sidebar({
                     </div>
                     <ul className="space-y-2 p-3">
                       {list.length === 0 ? (
-                        <li className="py-2 text-center text-xs text-gray-400">ยังไม่มีแชท</li>
+                        <li className="py-4 text-center text-gray-400 flex flex-col items-center gap-1">
+                          <MessageCircle className="h-8 w-8 text-gray-300" strokeWidth={1.2} />
+                          <span className="text-xs">No conversations yet in this channel.</span>
+                        </li>
                       ) : (
                         list.map((chat) => (
                           <li key={`${chat.channel_id}-${chat.line_user_id}`}>
@@ -366,16 +394,48 @@ export function Sidebar({
             </div>
           )
         ) : loading ? (
-          <div className="p-4 text-center text-gray-500">Loading...</div>
+          <div className="p-4 space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-200 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-3 w-1/2 rounded bg-gray-100 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : error ? (
-          <div className="p-4 text-center text-red-600">{error}</div>
+          <div className="p-4 text-center space-y-2">
+            <p className="text-sm text-red-600">{error}</p>
+            <button
+              type="button"
+              onClick={() => loadChats()}
+              className="rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
+            >
+              โหลดใหม่
+            </button>
+          </div>
         ) : chats.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
-            {showUnreadOnly
-              ? "ไม่มีแชทที่ยังไม่อ่าน"
-              : showMyChatsOnly
-              ? "ยังไม่มีแชทที่รับไว้ — ไปที่ Queue หรือกด รับ ในคิวรอรับด้านบน"
-              : "ยังไม่มีแชท — ลูกค้าส่งข้อความมาจะปรากฏที่นี่"}
+          <div className="p-4">
+            <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/50 p-6 text-center flex flex-col items-center gap-3">
+              <MessageCircle className="h-12 w-12 text-gray-300" strokeWidth={1.2} />
+              <p className="text-sm font-medium text-gray-700">No conversations in this channel yet</p>
+              <p className="text-xs text-gray-500">
+                {showUnreadOnly
+                  ? "ไม่มีแชทที่ยังไม่อ่าน"
+                  : showMyChatsOnly
+                  ? "ยังไม่มีแชทที่รับไว้ — ไปที่ Queue หรือกด รับ ในคิวรอรับด้านบน"
+                  : "Send a message via Line OA to start chatting."}
+              </p>
+              <button
+                type="button"
+                onClick={() => loadChats()}
+                className="rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
+              >
+                โหลดใหม่
+              </button>
+            </div>
           </div>
         ) : (
           <>

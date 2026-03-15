@@ -1,5 +1,6 @@
 /**
  * API client for LineUnifiedInbox Worker
+ * Set NEXT_PUBLIC_WORKER_URL in .env.local (e.g. https://your-worker.workers.dev) for production.
  */
 
 const WORKER_URL =
@@ -36,7 +37,11 @@ export async function fetchChannels(options?: { nocache?: boolean }) {
   const headers = await getAuthHeaders();
   const url = options?.nocache ? `${WORKER_URL}/channels?nocache=1` : `${WORKER_URL}/channels`;
   const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error("Failed to fetch channels");
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("[api] fetchChannels failed", res.status, errText);
+    throw new Error("Failed to fetch channels");
+  }
   return res.json();
 }
 
@@ -55,8 +60,18 @@ export async function fetchChats(channelId: string, options?: { assignedToMe?: b
   if (options?.assignedToMe) url += "&assigned_to=me";
   if (options?.unreadOnly) url += "&unread_only=1";
   const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error("Failed to fetch chats");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = (data && typeof data === "object" && typeof (data as { error?: string }).error === "string")
+      ? (data as { error: string }).error
+      : "Failed to fetch chats";
+    console.error("[api] fetchChats failed", res.status, data);
+    throw new Error(msg);
+  }
+  if (data && typeof data === "object" && "error" in data && Array.isArray((data as { chats?: unknown[] }).chats)) {
+    return (data as { chats: unknown[] }).chats;
+  }
+  return Array.isArray(data) ? data : [];
 }
 
 /** Batch multiple operations into one request */

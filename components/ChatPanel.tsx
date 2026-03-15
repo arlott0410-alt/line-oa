@@ -203,6 +203,7 @@ export function ChatPanel({
           filter: `channel_id=eq.${selectedChannelId}`,
         },
         (payload) => {
+          console.log("New message via realtime:", payload);
           const newMsg = payload.new as Message;
           if (newMsg.line_user_id === selectedUserId) {
             setMessages((prev) => {
@@ -212,7 +213,9 @@ export function ChatPanel({
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === "CHANNEL_ERROR" && err) toast.error("Realtime error: " + (err?.message ?? String(err)));
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -458,7 +461,7 @@ export function ChatPanel({
                           : "rounded-br-md bg-[#06C755] text-white"
                       }`}
                     >
-                      {msg.image_preview_url ? (
+                      {(msg.image_original_url || msg.image_preview_url) ? (
                         <button
                           type="button"
                           onClick={() =>
@@ -467,7 +470,7 @@ export function ChatPanel({
                           className="block cursor-pointer"
                         >
                           <img
-                            src={msg.image_preview_url}
+                            src={msg.image_original_url || msg.image_preview_url || ""}
                             alt="รูปภาพจากลูกค้า"
                             className="max-w-xs max-h-64 rounded-lg object-contain hover:opacity-90 transition"
                           />
@@ -475,7 +478,7 @@ export function ChatPanel({
                       ) : null}
                       {msg.content && msg.content !== "[Image]" ? (
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                      ) : msg.content === "[Image]" && !msg.image_preview_url ? (
+                      ) : msg.content === "[Image]" && !msg.image_original_url && !msg.image_preview_url ? (
                         <p className="text-sm opacity-80">[รูปภาพ – กำลังโหลด]</p>
                       ) : null}
                       <p

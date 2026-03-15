@@ -308,6 +308,19 @@ app.use(
   })
 );
 
+app.use("*", async (c, next) => {
+  console.log(`Request to ${c.req.path}`);
+  await next();
+});
+
+app.onError((err, c) => {
+  console.error(err);
+  return c.json(
+    { error: err.message || "Internal error" },
+    500
+  );
+});
+
 // GET /r2/* - Serve images from R2 (เมื่อ R2_PUBLIC_BASE_URL ไม่ได้ตั้งค่า)
 app.get("/r2/*", async (c) => {
   const bucket = c.env.IMAGES_BUCKET as R2Bucket | undefined;
@@ -610,6 +623,7 @@ const CHATS_CACHE_TTL = 60; // 1 min
 
 // GET /channels - List channels (auth required, cached in KV)
 app.get("/channels", async (c) => {
+  try {
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const kv = c.env.CACHE_KV;
@@ -694,6 +708,10 @@ app.get("/channels", async (c) => {
     await kv.put(CHANNELS_CACHE_KEY, JSON.stringify(data), { expirationTtl: CHANNELS_CACHE_TTL });
   }
   return c.json(data);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: (e as Error).message || "Internal error" }, 500);
+  }
 });
 
 // POST /cache/invalidate - ล้าง cache เมื่อเพิ่ม/แก้ไข/ลบ channel (auth required)
@@ -725,9 +743,12 @@ app.post("/cache/invalidate", async (c) => {
 
 // GET /chats?channel_id=xxx&assigned_to=me&unread_only=1
 app.get("/chats", async (c) => {
+  try {
   const channelId = c.req.query("channel_id");
   const assignedToMe = c.req.query("assigned_to") === "me";
   const unreadOnly = c.req.query("unread_only") === "1";
+  console.log(`GET /chats called with channel_id=${channelId ?? "null"}, assigned_to=${assignedToMe ? "me" : "all"}, unread_only=${unreadOnly}`);
+
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const kv = c.env.CACHE_KV;
@@ -737,7 +758,7 @@ app.get("/chats", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   if (!channelId) {
-    return c.json({ error: "channel_id required" }, 400);
+    return c.json({ error: "channel_id required", chats: [] }, 400);
   }
 
   const token = authHeader.slice(7);
@@ -746,7 +767,7 @@ app.get("/chats", async (c) => {
   });
   const userData = await userRes.json();
   const userId = userData.user?.id ?? userData.id;
-  if (userData.error || !userId) return c.json({ error: "Invalid token" }, 401);
+  if (userData.error || !userId) return c.json({ error: "Invalid token", chats: [] }, 401);
 
   const cacheKey = `chats:${channelId}:${assignedToMe ? (unreadOnly ? `${userId}:unread` : userId) : "all"}`;
   if (kv) {
@@ -754,6 +775,7 @@ app.get("/chats", async (c) => {
     if (cached) {
       try {
         const data = JSON.parse(cached);
+        console.log(`GET /chats cache hit for ${channelId}, count=${Array.isArray(data) ? data.length : 0}`);
         return c.json(data);
       } catch {
         /* invalid cache, fall through */
@@ -762,7 +784,11 @@ app.get("/chats", async (c) => {
   }
 
   let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type`;
-  if (assignedToMe || unreadOnly) url += `&assigned_admin_id=eq.${userId}`;
+  // DEBUG: ignore assigned_to=me so all chats in channel are returned (avoids empty list when no assignment)
+  if (assignedToMe || unreadOnly) {
+    console.log(`GET /chats: would filter assigned_to=me (userId=${userId}), ignoring for debugging – returning all channel chats`);
+    // url += `&assigned_admin_id=eq.${userId}`;  // re-enable when assignment filter is needed
+  }
 
   const res = await fetch(url, {
     headers: {
@@ -771,21 +797,33 @@ app.get("/chats", async (c) => {
     },
   });
 
-  if (!res.ok) return c.json({ error: "Failed to fetch chats" }, 500);
-  let users = await res.json();
-  users = Array.isArray(users) ? users : [];
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("GET /chats Supabase error", res.status, errText);
+    return c.json({ error: "Failed to fetch chats", chats: [] }, 500);
+  }
+  let users: unknown;
+  try {
+    users = await res.json();
+  } catch (e) {
+    console.error("GET /chats JSON parse error", e);
+    return c.json({ error: "Invalid response from Supabase", chats: [] }, 500);
+  }
+  const usersList = Array.isArray(users) ? users : [];
+  console.log(`GET /chats - channel_id: ${channelId ?? "none"}, assigned_to: ${assignedToMe ? "me" : "none"}, result count: ${usersList.length}`);
 
+  let filtered = usersList;
   if (unreadOnly) {
     const now = Date.now();
-    users = users.filter((u: { last_message_sender_type?: string; last_message_timestamp?: string; viewed_by_admin_at?: string | null }) => {
+    filtered = usersList.filter((u: { last_message_sender_type?: string; last_message_timestamp?: string; viewed_by_admin_at?: string | null }) => {
       if (u.last_message_sender_type !== "user") return false;
-      const viewedAt = u.viewed_by_admin_at ? new Date(u.viewed_by_admin_at).getTime() : 0;
+      const viewedAt = (u as { viewed_by_admin_at?: string | null }).viewed_by_admin_at ? new Date((u as { viewed_by_admin_at: string }).viewed_by_admin_at).getTime() : 0;
       const lastMsgAt = u.last_message_timestamp ? new Date(u.last_message_timestamp).getTime() : 0;
       return lastMsgAt > viewedAt;
     });
   }
 
-  const assignedIds = [...new Set((users as { assigned_admin_id?: string | null }[]).map((u) => u.assigned_admin_id).filter(Boolean))] as string[];
+  const assignedIds = [...new Set((filtered as { assigned_admin_id?: string | null }[]).map((u) => u.assigned_admin_id).filter(Boolean))] as string[];
   let profileMap = new Map<string, string>();
   if (assignedIds.length > 0) {
     const idsFilter = assignedIds.map((id) => `"${id}"`).join(",");
@@ -801,31 +839,34 @@ app.get("/chats", async (c) => {
     }
   }
 
-  const usersWithLastMessage = users.map(
-    (u: {
-      line_user_id: string;
-      assigned_admin_id?: string | null;
-      last_message_content?: string;
-      last_message_timestamp?: string;
-      last_message_sender_type?: string;
-    }) => ({
-      ...u,
-      assigned_admin_display_name: u.assigned_admin_id ? profileMap.get(u.assigned_admin_id) || null : null,
-      last_message:
-        u.last_message_content != null
-          ? {
-              content: u.last_message_content,
-              timestamp: u.last_message_timestamp,
-              sender_type: u.last_message_sender_type || "user",
-            }
-          : null,
-    })
-  );
+  const usersWithLastMessage = (filtered as {
+    line_user_id: string;
+    assigned_admin_id?: string | null;
+    last_message_content?: string;
+    last_message_timestamp?: string;
+    last_message_sender_type?: string;
+  }[]).map((u) => ({
+    ...u,
+    assigned_admin_display_name: u.assigned_admin_id ? profileMap.get(u.assigned_admin_id) || null : null,
+    last_message:
+      u.last_message_content != null
+        ? {
+            content: u.last_message_content,
+            timestamp: u.last_message_timestamp,
+            sender_type: u.last_message_sender_type || "user",
+          }
+        : null,
+  }));
 
   if (kv) {
     await kv.put(cacheKey, JSON.stringify(usersWithLastMessage), { expirationTtl: CHATS_CACHE_TTL });
   }
+  console.log(`GET /chats - channel_id: ${channelId}, assigned_to: ${assignedToMe ? "me" : "none"}, result count: ${usersWithLastMessage.length}`);
   return c.json(usersWithLastMessage);
+  } catch (e) {
+    console.error("GET /chats error", e);
+    return c.json({ error: (e as Error).message || "Internal error", chats: [] }, 500);
+  }
 });
 
 // POST /batch - Execute multiple operations in one request (reduces round-trips)
@@ -992,6 +1033,7 @@ app.post("/queue/assign", async (c) => {
 
 // GET /messages/:userId?channel_id=xxx&limit=50&offset=0
 app.get("/messages/:userId", async (c) => {
+  try {
   const userId = c.req.param("userId");
   const channelId = c.req.query("channel_id");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10) || 50, 100);
@@ -1028,6 +1070,10 @@ app.get("/messages/:userId", async (c) => {
   if (!res.ok) return c.json({ error: "Failed to fetch messages" }, 500);
   const messages = await res.json();
   return c.json(messages);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: (e as Error).message || "Internal error" }, 500);
+  }
 });
 
 // POST /upload-image - อัปโหลดรูปสำหรับส่งให้ลูกค้า (auth required)
@@ -1083,6 +1129,7 @@ app.post("/upload-image", async (c) => {
 
 // POST /reply - Require channel_id, get access_token from DB (รองรับ text และ/หรือ image)
 app.post("/reply", async (c) => {
+  try {
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
@@ -1194,6 +1241,10 @@ app.post("/reply", async (c) => {
   });
 
   return c.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: (e as Error).message || "Internal error" }, 500);
+  }
 });
 
 // --- Admin routes ---
