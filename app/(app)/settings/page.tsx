@@ -278,16 +278,16 @@ export default function SettingsPage() {
           </Dialog>
 
           <Dialog open={webhookModalOpen} onOpenChange={setWebhookModalOpen}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
               <div className="flex items-start gap-4">
-                <div className="rounded-full bg-[#06C755]/10 p-2.5">
+                <div className="shrink-0 rounded-full bg-[#06C755]/10 p-2.5">
                   <CheckCircle2 className="h-6 w-6 text-[#06C755]" />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1 overflow-hidden">
                   <DialogHeader>
-                    <DialogTitle className="text-lg">Channel Saved Successfully</DialogTitle>
+                    <DialogTitle className="text-lg leading-tight">Channel Saved Successfully</DialogTitle>
                   </DialogHeader>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="mt-2 break-words text-sm leading-relaxed text-gray-600">
                     Copy the Webhook URL below and paste it into your Line OA&apos;s Messaging API settings in LINE Developers Console. The same URL is used for all channels.
                   </p>
                   <div className="mt-4 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
