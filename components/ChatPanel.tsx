@@ -61,6 +61,7 @@ interface Message {
   image_original_url?: string | null;
   image_preview_url?: string | null;
   mime_type?: string | null;
+  replied_by?: string | null;
   replied_by_display_name?: string | null;
 }
 
@@ -511,7 +512,11 @@ export function ChatPanel({
                   >
                     {!isCustomer && (
                       <span className="text-[10px] text-gray-500 px-1" title="ผู้ส่งข้อความ">
-                        {msg.replied_by_display_name || "ทีมงาน"}
+                        {msg.replied_by_display_name ||
+                          (msg.replied_by && currentAdminId && msg.replied_by === currentAdminId
+                            ? currentAdminDisplayName
+                            : null) ||
+                          "ทีมงาน"}
                       </span>
                     )}
                     <div
