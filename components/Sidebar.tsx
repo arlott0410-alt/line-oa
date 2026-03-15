@@ -278,7 +278,9 @@ export function Sidebar({
               {channelError}
             </p>
             <p className="text-center text-xs text-gray-500">
-              ตรวจสอบ: ใน Cloudflare Worker → Variables ต้องมี <strong>SUPABASE_URL</strong> และ <strong>SUPABASE_ANON_KEY</strong> (ถ้าตั้งเป็น SUPABASE_URI ระบบจะใช้แทนได้), รัน migrations ใน Supabase, และ User มี role ในตาราง user_roles
+              <strong>เรื่องสิทธิ์ (error 1042):</strong> เปิด Supabase → SQL Editor → รันไฟล์ <code className="bg-gray-100 px-1 rounded">supabase/fix_channels_1042.sql</code> (ใส่ role ให้ User ในตาราง user_roles)
+              <br />
+              <strong>Worker:</strong> ต้องมี <strong>SUPABASE_URL</strong> และ <strong>SUPABASE_ANON_KEY</strong> ใน Cloudflare → Variables
             </p>
             {onRefreshChannels && (
               <p className="text-center pt-2">

@@ -37,6 +37,12 @@
 2. สร้าง user ใน Supabase Auth และตั้ง role เป็น `super_admin` ใน `user_roles`
 3. เพิ่ม channel ผ่าน Settings หลัง login
 
+### แก้ "ไม่สามารถโหลด channels ได้" / error code 1042 (เรื่องสิทธิ์)
+
+ถ้า Dashboard แสดง error 1042 และโหลดรายการแชท/ช่องไม่ได้ สาเหตุส่วนใหญ่คือ **User ที่ login ยังไม่มี role ในตาราง `user_roles`** ทำให้ RLS (Row Level Security) ของ Supabase บล็อกการอ่านตาราง `channels`
+
+**วิธีแก้:** เปิด Supabase Dashboard → **SQL Editor** → เปิดไฟล์ `supabase/fix_channels_1042.sql` ในโปรเจกต์ แล้วรันตามขั้นตอนในไฟล์ (ดู user id จาก `auth.users` แล้ว INSERT ลง `user_roles` ให้ role เป็น `super_admin`) จากนั้นกด "โหลดใหม่ (ล้าง cache)" ในหน้า Dashboard
+
 ---
 
 ## ส่วนที่ 1: Deploy Worker
