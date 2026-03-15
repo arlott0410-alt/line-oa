@@ -503,8 +503,13 @@ export function ChatPanel({
                   className={`flex ${isCustomer ? "justify-start" : "justify-end"}`}
                 >
                   <div
-                    className={`flex max-w-[75%] gap-2 ${isCustomer ? "flex-row" : "flex-row-reverse"}`}
+                    className={`flex max-w-[75%] flex-col gap-0.5 ${isCustomer ? "items-start" : "items-end"}`}
                   >
+                    {!isCustomer && (
+                      <span className="text-[10px] text-gray-500 px-1" title="ผู้ส่งข้อความ">
+                        {msg.replied_by_display_name || "ทีมงาน"}
+                      </span>
+                    )}
                     <div
                       className={`rounded-2xl px-4 py-2 shadow-sm ${
                         isCustomer
@@ -543,11 +548,6 @@ export function ChatPanel({
                             minute: "2-digit",
                           })}
                         </span>
-                        {!isCustomer && msg.replied_by_display_name && (
-                          <span className="text-[10px] text-green-100/90" title="ผู้ตอบ">
-                            {msg.replied_by_display_name}
-                          </span>
-                        )}
                         {showRead && (
                           <span className="text-[10px] text-muted-foreground">อ่านแล้ว</span>
                         )}
