@@ -1,5 +1,9 @@
 -- แก้ปัญหา "ไม่สามารถโหลด channels ได้" / error code 1042
 -- วิธีใช้: เปิด Supabase Dashboard → SQL Editor → วางแล้วรันทีละบล็อก
+--
+-- สาเหตุ 1042 (PostgreSQL: undefined_object) มักเป็นหนึ่งในสองอย่าง:
+-- (1) ไม่มี function get_my_role() ใน DB ที่ Worker เรียก (รัน full_schema ไม่ครบหรือรันคนละโปรเจกต์)
+-- (2) Worker ใช้ SUPABASE_URL / SUPABASE_ANON_KEY ของอีกโปรเจกต์ (คนละกับที่คุณล็อกอินและรัน migration)
 
 -- ========== กรณีที่ 1: ตรวจว่าใครมี role บ้าง ==========
 -- 1) ดู User ทั้งหมดในระบบ
@@ -31,15 +35,23 @@ FROM pg_policies
 WHERE tablename = 'channels';
 -- ควรเห็น policy "admin and viewer can read channels" และ qual มี get_my_role()
 
--- 6) ถ้า get_my_role ไม่มี → รัน migration 20260322000001_full_schema.sql (หรือรัน full_schema ทั้งไฟล์)
--- CREATE OR REPLACE FUNCTION public.get_my_role()
--- RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
--- AS $$ SELECT role FROM user_roles WHERE user_id = auth.uid() LIMIT 1; $$;
---
--- DROP POLICY IF EXISTS "admin and viewer can read channels" ON channels;
--- CREATE POLICY "admin and viewer can read channels"
---   ON channels FOR SELECT TO authenticated
---   USING (public.get_my_role() IN ('super_admin', 'admin', 'viewer'));
+-- 6) ถ้า get_my_role ไม่มี → รันบล็อกด้านล่างนี้ (หรือรัน 20260322000001_full_schema.sql ทั้งไฟล์)
+-- ========== รันบล็อกนี้เมื่อไม่มี get_my_role (แก้ 1042 โดยไม่ต้องลบข้อมูล) ==========
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$ SELECT role FROM user_roles WHERE user_id = auth.uid() LIMIT 1; $$;
+
+DROP POLICY IF EXISTS "admin and viewer can read channels" ON channels;
+CREATE POLICY "admin and viewer can read channels"
+  ON channels FOR SELECT TO authenticated
+  USING (public.get_my_role() IN ('super_admin', 'admin', 'viewer'));
+
+DROP POLICY IF EXISTS "super_admin can manage channels" ON channels;
+CREATE POLICY "super_admin can manage channels"
+  ON channels FOR ALL TO authenticated
+  USING (public.get_my_role() = 'super_admin')
+  WITH CHECK (public.get_my_role() = 'super_admin');
+-- ========== จบบล็อก ==========
 
 -- 7) ตรวจนอก Supabase: ใน Cloudflare Worker → Settings → Variables
 --    SUPABASE_URL ต้องเป็น URL ของโปรเจกต์นี้ (เช่น https://xxxx.supabase.co)

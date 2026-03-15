@@ -10,32 +10,27 @@
 
 1. ไปที่ **Supabase Dashboard** → **SQL Editor**
 2. รัน migrations ตามลำดับ (copy จากไฟล์):
-
-```
-supabase/migrations/20260313000000_initial_schema.sql
-supabase/migrations/20260313000001_add_channels.sql
-supabase/migrations/20260314000000_add_image_support.sql
-```
-
-**ถ้า Error 500 บน user_roles:** รัน `supabase/quick_fix_user_roles.sql` ใน SQL Editor ก่อน
-
-**ถ้า Error "infinite recursion detected in policy for relation user_roles":** รัน `supabase/migrations/20260314000001_fix_user_roles_rls_recursion.sql` ใน SQL Editor
+   - `supabase/migrations/20260322000000_drop_all_tables.sql` (ถ้าต้องการลบ schema เดิม)
+   - `supabase/migrations/20260322000001_full_schema.sql`
 
 หรือใช้คำสั่ง:
 ```bash
 supabase db push
 ```
 
+**ถ้า Error 500 บน user_roles:** รัน `supabase/quick_fix_user_roles.sql` ใน SQL Editor ก่อน
+
 ---
 
 ## 2. สร้าง User แรกและตั้ง Role
 
-1. Supabase → **Authentication** → **Users** → **Add user**
-2. สร้าง user (email + password)
-3. Copy **UUID** ของ user
-4. SQL Editor รัน:
+ดูขั้นตอนเต็มใน **`supabase/CREATE_USER.md`**
+
+สรุป: Supabase → **Authentication** → **Users** → **Add user** → สร้าง user → copy **UUID** → SQL Editor รัน:
+
 ```sql
-INSERT INTO user_roles (user_id, role) VALUES ('ใส่-UUID-ที่นี่', 'super_admin');
+INSERT INTO user_roles (user_id, role) VALUES ('ใส่-UUID-ที่นี่'::uuid, 'super_admin')
+ON CONFLICT (user_id) DO UPDATE SET role = 'super_admin';
 ```
 
 ---

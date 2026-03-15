@@ -33,6 +33,20 @@ async function fetchWithAuth(
   return res;
 }
 
+/** โหลด channels จาก Supabase โดยตรง (fallback เมื่อ Worker ล้มเหลว เช่น 1042) */
+export async function fetchChannelsFromSupabase(): Promise<Array<{ id: string; name: string; bot_user_id: string }>> {
+  const { supabase } = await import("./supabase");
+  const { data, error } = await supabase
+    .from("channels")
+    .select("id,name,bot_user_id")
+    .order("name");
+  if (error) {
+    console.error("[api] fetchChannelsFromSupabase failed", error);
+    throw new Error(error.message || "Failed to fetch channels");
+  }
+  return Array.isArray(data) ? data : [];
+}
+
 export async function fetchChannels(options?: { nocache?: boolean }) {
   const headers = await getAuthHeaders();
   const url = options?.nocache ? `${WORKER_URL}/channels?nocache=1` : `${WORKER_URL}/channels`;
@@ -54,6 +68,72 @@ export async function invalidateChannelsCache() {
   if (!res.ok) return; // ไม่ต้อง throw - cache ไม่มีก็ยังทำงานได้
 }
 
+/** โหลดรายการแชทจาก Supabase โดยตรง (fallback เมื่อ Worker ล้มเหลว) */
+export async function fetchChatsFromSupabase(
+  channelId: string,
+  _options?: { assignedToMe?: boolean; unreadOnly?: boolean }
+): Promise<Array<{
+  id: string;
+  line_user_id: string;
+  profile_name: string | null;
+  avatar: string | null;
+  last_active: string;
+  channel_id?: string;
+  tags?: string[] | null;
+  assigned_admin_id?: string | null;
+  assigned_admin_display_name?: string | null;
+  last_message?: { content: string; timestamp: string; sender_type: string } | null;
+}>> {
+  const { supabase } = await import("./supabase");
+  const { data: rows, error } = await supabase
+    .from("line_users")
+    .select("id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,last_message_content,last_message_timestamp,last_message_sender_type")
+    .eq("channel_id", channelId)
+    .order("last_active", { ascending: false });
+  if (error) {
+    console.error("[api] fetchChatsFromSupabase failed", error);
+    throw new Error(error.message || "Failed to fetch chats");
+  }
+  const list = Array.isArray(rows) ? rows : [];
+  const adminIds = [...new Set(list.map((r: { assigned_admin_id?: string | null }) => r.assigned_admin_id).filter(Boolean))] as string[];
+  let displayNames: Record<string, string> = {};
+  if (adminIds.length > 0) {
+    const { data: profiles } = await supabase.from("admin_profiles").select("user_id,display_name").in("user_id", adminIds);
+    if (Array.isArray(profiles)) {
+      profiles.forEach((p: { user_id: string; display_name: string | null }) => {
+        displayNames[p.user_id] = p.display_name ?? "";
+      });
+    }
+  }
+  return list.map((u: {
+    id: string;
+    line_user_id: string;
+    profile_name: string | null;
+    avatar: string | null;
+    last_active: string;
+    channel_id?: string;
+    assigned_admin_id?: string | null;
+    tags?: string[] | null;
+    last_message_content?: string | null;
+    last_message_timestamp?: string | null;
+    last_message_sender_type?: string | null;
+  }) => ({
+    id: u.id,
+    line_user_id: u.line_user_id,
+    profile_name: u.profile_name,
+    avatar: u.avatar,
+    last_active: u.last_active,
+    channel_id: u.channel_id,
+    tags: u.tags ?? null,
+    assigned_admin_id: u.assigned_admin_id ?? null,
+    assigned_admin_display_name: u.assigned_admin_id ? (displayNames[u.assigned_admin_id] || null) : null,
+    last_message:
+      u.last_message_content != null
+        ? { content: u.last_message_content, timestamp: u.last_message_timestamp ?? "", sender_type: u.last_message_sender_type ?? "user" }
+        : null,
+  }));
+}
+
 export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean }) {
   const headers = await getAuthHeaders();
   let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`;
@@ -62,11 +142,15 @@ export async function fetchChats(channelId: string, options?: { assignedToMe?: b
   const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && typeof (data as { error?: string }).error === "string")
-      ? (data as { error: string }).error
-      : "Failed to fetch chats";
-    console.error("[api] fetchChats failed", res.status, data);
-    throw new Error(msg);
+    try {
+      return await fetchChatsFromSupabase(channelId, options);
+    } catch (fallbackErr) {
+      const msg = (data && typeof data === "object" && typeof (data as { error?: string }).error === "string")
+        ? (data as { error: string }).error
+        : "Failed to fetch chats";
+      console.error("[api] fetchChats failed", res.status, data);
+      throw new Error(msg);
+    }
   }
   if (data && typeof data === "object" && "error" in data && Array.isArray((data as { chats?: unknown[] }).chats)) {
     return (data as { chats: unknown[] }).chats;

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { fetchBatch, fetchQueue as fetchQueueApi } from "@/lib/api";
+import { fetchBatch, fetchChannelsFromSupabase, fetchQueue as fetchQueueApi } from "@/lib/api";
 import { Sidebar, type QueueItem } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -105,6 +105,21 @@ export default function DashboardPage() {
         } catch {
           /* ใช้ raw */
         }
+        try {
+          const fallbackChannels = await fetchChannelsFromSupabase();
+          if (fallbackChannels.length > 0) {
+            setChannels(fallbackChannels);
+            setChannelError(null);
+            const firstId = lastChannelId && fallbackChannels.some((c) => c.id === lastChannelId)
+              ? lastChannelId
+              : fallbackChannels[0].id;
+            setSelectedChannelId(firstId);
+            if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, firstId);
+            return;
+          }
+        } catch {
+          /* ใช้ fallback ไม่ได้ แสดง error เดิม */
+        }
         setChannelError(msg);
         setChannels([]);
         toast.error("Failed to load channels: " + msg);
@@ -124,7 +139,20 @@ export default function DashboardPage() {
       if (channelsData.length === 0) setShowOnboarding(true);
     } catch (err) {
       const msg = (err as Error).message;
+      try {
+        const fallbackChannels = await fetchChannelsFromSupabase();
+        if (fallbackChannels.length > 0) {
+          setChannels(fallbackChannels);
+          setChannelError(null);
+          setSelectedChannelId(fallbackChannels[0].id);
+          if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, fallbackChannels[0].id);
+          return;
+        }
+      } catch {
+        /* ใช้ fallback ไม่ได้ */
+      }
       setChannelError(msg);
+      setChannels([]);
       toast.error("Failed to load channels: " + msg);
     } finally {
       setChannelsLoading(false);
