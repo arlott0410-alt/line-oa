@@ -1040,6 +1040,7 @@ app.get("/messages/:userId", async (c) => {
   const offset = parseInt(c.req.query("offset") || "0", 10) || 0;
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
+  const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -1071,14 +1072,15 @@ app.get("/messages/:userId", async (c) => {
   const messages = (await res.json()) as Array<{ replied_by?: string | null } & Record<string, unknown>>;
   const repliedByIds = [...new Set(messages.map((m) => m.replied_by).filter(Boolean))] as string[];
   let replyProfileMap = new Map<string, string>();
-  if (repliedByIds.length > 0) {
+  if (repliedByIds.length > 0 && supabaseServiceKey) {
     const idsFilter = repliedByIds.map((id) => `"${id}"`).join(",");
     const profilesRes = await fetch(
       `${supabaseUrl}/rest/v1/admin_profiles?user_id=in.(${idsFilter})&select=user_id,display_name`,
       {
         headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${token}`,
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          "Content-Type": "application/json",
         },
       }
     );
