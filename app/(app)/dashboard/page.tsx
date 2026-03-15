@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { X } from "lucide-react";
 
 const STORAGE_KEY_LAST_CHANNEL = "line-oa-last-channel";
+const ALL_CHANNELS_ID = "__all__";
 
 export interface ChatUser {
   id: string;
@@ -55,6 +56,8 @@ export default function DashboardPage() {
   const [openChats, setOpenChats] = useState<Array<{ id: string; channelId: string; userId: string; chat: ChatUser }>>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [chatsByChannel, setChatsByChannel] = useState<Record<string, ChatUser[]>>({});
+  const [allChannelsLoading, setAllChannelsLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -80,23 +83,31 @@ export default function DashboardPage() {
     });
   }, [session, canClaim]);
 
-  const loadChannelsAndMaybeChats = useCallback(async () => {
+  const loadChannelsAndMaybeChats = useCallback(async (options?: { nocache?: boolean }) => {
     if (!session) return;
     setChannelError(null);
     const lastChannelId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_LAST_CHANNEL) : null;
-    const ops: Array<{ method: "get_channels" } | { method: "get_chats"; channel_id: string }> = [{ method: "get_channels" }];
+    const ops: Array<{ method: "get_channels"; nocache?: boolean } | { method: "get_chats"; channel_id: string }> = [
+      { method: "get_channels", ...(options?.nocache ? { nocache: true } : {}) },
+    ];
     if (lastChannelId) ops.push({ method: "get_chats", channel_id: lastChannelId });
     try {
       const results = await fetchBatch(ops);
-      const channelsData = Array.isArray(results[0]) ? results[0] : [];
+      const first = results[0];
+      if (first && typeof first === "object" && "error" in first && typeof (first as { error: string }).error === "string") {
+        setChannelError((first as { error: string }).error);
+        setChannels([]);
+        return;
+      }
+      const channelsData = Array.isArray(first) ? first : [];
       setChannels(channelsData);
       if (channelsData.length > 0) {
         setSelectedChannelId((prev) => {
           if (prev) return prev;
-          const channelToSelect = lastChannelId && channelsData.some((c: { id: string }) => c.id === lastChannelId)
-            ? lastChannelId
-            : channelsData[0].id;
-          return channelToSelect;
+          if (lastChannelId === ALL_CHANNELS_ID) return ALL_CHANNELS_ID;
+          if (lastChannelId && channelsData.some((c: { id: string }) => c.id === lastChannelId))
+            return lastChannelId;
+          return channelsData[0].id;
         });
       }
       if (channelsData.length === 0) setShowOnboarding(true);
@@ -110,6 +121,38 @@ export default function DashboardPage() {
     if (!session) return;
     loadChannelsAndMaybeChats();
   }, [session]);
+
+  const loadAllChannelsChats = useCallback(async () => {
+    if (!session || channels.length === 0) return;
+    setAllChannelsLoading(true);
+    try {
+      const operations = channels.map((ch) => ({
+        method: "get_chats" as const,
+        channel_id: ch.id,
+        ...(showMyChatsOnly ? { assigned_to: "me" as const } : {}),
+        ...(showUnreadOnly ? { unread_only: "1" as const } : {}),
+      }));
+      const results = await fetchBatch(operations);
+      const byChannel: Record<string, ChatUser[]> = {};
+      channels.forEach((ch, i) => {
+        const data = results[i];
+        byChannel[ch.id] = Array.isArray(data) ? data : [];
+      });
+      setChatsByChannel(byChannel);
+    } catch {
+      setChatsByChannel({});
+    } finally {
+      setAllChannelsLoading(false);
+    }
+  }, [session, channels, showMyChatsOnly, showUnreadOnly]);
+
+  useEffect(() => {
+    if (selectedChannelId === ALL_CHANNELS_ID && channels.length > 0) {
+      loadAllChannelsChats();
+    } else {
+      setChatsByChannel({});
+    }
+  }, [selectedChannelId, channels.length, loadAllChannelsChats]);
 
   const fetchQueue = async () => {
     if (!session || !canClaim) return;
@@ -253,18 +296,23 @@ export default function DashboardPage() {
             setSelectedUserId(null);
             setSelectedChat(null);
           }}
+          chatsByChannel={selectedChannelId === ALL_CHANNELS_ID ? chatsByChannel : undefined}
+          allChannelsLoading={allChannelsLoading}
+          selectedChat={selectedChat}
           onSelectUser={(id) => {
             setSelectedUserId(id);
             if (!id) setSelectedChat(null);
           }}
           onSelectChat={(chat) => {
             setSelectedChat(chat);
-            if (chat && selectedChannelId) {
-              addOrFocusChat(selectedChannelId, chat.line_user_id, chat);
+            if (chat) {
+              const chId = chat.channel_id ?? selectedChannelId;
+              if (chId && chId !== ALL_CHANNELS_ID) addOrFocusChat(chId, chat.line_user_id, chat);
             }
           }}
           token={session.access_token}
           channelError={channelError}
+          onRefreshChannels={() => loadChannelsAndMaybeChats({ nocache: true })}
           showMyChatsOnly={showMyChatsOnly}
           onMyChatsToggle={setShowMyChatsOnly}
           showUnreadOnly={showUnreadOnly}
@@ -300,10 +348,14 @@ export default function DashboardPage() {
           {openChats.length === 0 ? (
             <ChatPanel
               selectedUserId={selectedUserId}
-              selectedChannelId={selectedChannelId}
+              selectedChannelId={
+                selectedChannelId === ALL_CHANNELS_ID
+                  ? (selectedChat?.channel_id ?? null)
+                  : selectedChannelId
+              }
               selectedChannelName={
-                channels.length > 1 && selectedChannelId
-                  ? channels.find((c) => c.id === selectedChannelId)?.name ?? null
+                channels.length > 1 && (selectedChannelId === ALL_CHANNELS_ID ? selectedChat?.channel_id : selectedChannelId)
+                  ? channels.find((c) => c.id === (selectedChannelId === ALL_CHANNELS_ID ? selectedChat?.channel_id : selectedChannelId))?.name ?? null
                   : null
               }
               selectedChat={selectedChat}

@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { fetchChats } from "@/lib/api";
 import debounce from "lodash/debounce";
 import { CircleDot, Clock, CircleOff } from "lucide-react";
-import { WorkflowGuide } from "@/components/WorkflowGuide";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 export interface QueueItem {
@@ -19,15 +18,23 @@ export interface QueueItem {
   last_message: { content: string; timestamp: string } | null;
 }
 
+const ALL_CHANNELS_ID = "__all__";
+
 interface SidebarProps {
   selectedUserId: string | null;
   selectedChannelId: string | null;
   channels: Channel[];
+  /** เมื่อเลือก "ทั้งหมดทุก LINE" จะส่ง object แชทแยกตาม channel_id */
+  chatsByChannel?: Record<string, ChatUser[]>;
+  allChannelsLoading?: boolean;
+  /** แชทที่กำลังเลือก (ใช้ไฮไลต์ในโหมดทั้งหมดทุก LINE) */
+  selectedChat?: ChatUser | null;
   onSelectChannel: (channelId: string) => void;
   onSelectUser: (userId: string | null) => void;
   onSelectChat?: (chat: ChatUser | null) => void;
   token: string;
   channelError?: string | null;
+  onRefreshChannels?: () => void;
   showMyChatsOnly?: boolean;
   onMyChatsToggle?: (value: boolean) => void;
   showUnreadOnly?: boolean;
@@ -44,11 +51,15 @@ export function Sidebar({
   selectedUserId,
   selectedChannelId,
   channels,
+  chatsByChannel,
+  allChannelsLoading = false,
+  selectedChat,
   onSelectChannel,
   onSelectUser,
   onSelectChat,
   token,
   channelError,
+  onRefreshChannels,
   showMyChatsOnly = false,
   onMyChatsToggle,
   showUnreadOnly = false,
@@ -65,7 +76,7 @@ export function Sidebar({
   const [error, setError] = useState("");
 
   const loadChats = useCallback(async () => {
-    if (!selectedChannelId) {
+    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) {
       setChats([]);
       setLoading(false);
       return;
@@ -91,7 +102,7 @@ export function Sidebar({
   );
 
   useEffect(() => {
-    if (!selectedChannelId) {
+    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) {
       setChats([]);
       setLoading(false);
       return;
@@ -101,7 +112,7 @@ export function Sidebar({
   }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats]);
 
   useEffect(() => {
-    if (!selectedChannelId) return;
+    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) return;
     const channel = supabase
       .channel(`sidebar-updates-${selectedChannelId}`)
       .on(
@@ -174,13 +185,13 @@ export function Sidebar({
           )}
         </div>
         </div>
-        {canClaim && <WorkflowGuide />}
         {channels.length > 0 && (
           <select
             value={selectedChannelId || ""}
             onChange={(e) => onSelectChannel(e.target.value)}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           >
+            <option value={ALL_CHANNELS_ID}>ทั้งหมดทุก LINE</option>
             {channels.map((ch) => (
               <option key={ch.id} value={ch.id}>
                 {ch.name}
@@ -188,17 +199,17 @@ export function Sidebar({
             ))}
           </select>
         )}
-        {onMyChatsToggle && canClaim && (
-          <div className="mt-2 space-y-1">
-            <p className="text-[10px] text-gray-500 font-medium">กรองแชท</p>
-            <div className="flex gap-1">
+        {selectedChannelId && (onMyChatsToggle != null || onUnreadToggle != null) && (
+          <div className="mt-2 space-y-1.5">
+            <p className="text-xs font-semibold text-gray-700">กรองแชท</p>
+            <div className="flex gap-1 flex-wrap">
               <button
                 type="button"
                 onClick={() => {
-                  onMyChatsToggle(false);
+                  onMyChatsToggle?.(false);
                   onUnreadToggle?.(false);
                 }}
-                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                 title="แชททั้งหมดใน channel (รวมที่ยังไม่มีคนรับ)"
               >
                 ทั้งหมด
@@ -206,22 +217,24 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => {
-                  onMyChatsToggle(true);
+                  onMyChatsToggle?.(true);
                   onUnreadToggle?.(false);
                 }}
-                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                title="แชทที่คุณกดรับไว้แล้ว — ใช้ดูแชทที่รับผิดชอบอยู่"
+                disabled={!canClaim}
+                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} ${!canClaim ? "opacity-60 cursor-not-allowed" : ""}`}
+                title={canClaim ? "แชทที่คุณกดรับไว้แล้ว — ใช้ดูแชทที่รับผิดชอบอยู่" : "ต้องมีสิทธิ์รับแชท"}
               >
                 รับไว้แล้ว
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  onMyChatsToggle(true);
+                  onMyChatsToggle?.(true);
                   onUnreadToggle?.(true);
                 }}
-                className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                title="แชทที่ลูกค้าส่งมาล่าสุดและยังไม่ได้เปิดดู — ตอบด่วน"
+                disabled={!canClaim}
+                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} ${!canClaim ? "opacity-60 cursor-not-allowed" : ""}`}
+                title={canClaim ? "แชทที่ลูกค้าส่งมาล่าสุดและยังไม่ได้เปิดดู — ตอบด่วน" : "ต้องมีสิทธิ์รับแชท"}
               >
                 ยังไม่อ่าน
               </button>
@@ -267,11 +280,89 @@ export function Sidebar({
             <p className="text-center text-xs text-gray-500">
               ตรวจสอบ: Worker มี SUPABASE_URL, รัน migrations ใน Supabase, User มี role ใน user_roles
             </p>
+            {onRefreshChannels && (
+              <p className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={onRefreshChannels}
+                  className="text-xs text-green-600 hover:underline"
+                >
+                  โหลดใหม่ (ล้าง cache)
+                </button>
+              </p>
+            )}
           </div>
         ) : !selectedChannelId ? (
-          <div className="p-4 text-center text-gray-500">
-            No channel selected. Add one in Settings.
+          <div className="p-4 text-center text-gray-500 space-y-2">
+            <p>No channel selected. Add one in Settings.</p>
+            {onRefreshChannels && (
+              <button
+                type="button"
+                onClick={onRefreshChannels}
+                className="text-xs text-green-600 hover:underline"
+              >
+                โหลดใหม่ (ล้าง cache)
+              </button>
+            )}
           </div>
+        ) : selectedChannelId === ALL_CHANNELS_ID ? (
+          allChannelsLoading ? (
+            <div className="p-4 text-center text-gray-500">Loading...</div>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              {channels.map((ch) => {
+                const list = chatsByChannel?.[ch.id] ?? [];
+                return (
+                  <div key={ch.id} className="border-b border-gray-200">
+                    <div className="sticky top-0 z-10 bg-gray-100 px-3 py-2">
+                      <p className="text-xs font-semibold text-gray-500">มาจาก LINE</p>
+                      <p className="truncate text-sm font-medium text-gray-900">{ch.name}</p>
+                    </div>
+                    <ul className="space-y-2 p-3">
+                      {list.length === 0 ? (
+                        <li className="py-2 text-center text-xs text-gray-400">ยังไม่มีแชท</li>
+                      ) : (
+                        list.map((chat) => (
+                          <li key={`${chat.channel_id}-${chat.line_user_id}`}>
+                            <button
+                              onClick={() => {
+                                onSelectUser(chat.line_user_id);
+                                onSelectChat?.(chat);
+                              }}
+                              className={`flex w-full items-center gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all duration-200 ${
+                                selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id
+                                  ? "border-[#06C755] bg-[#06C755] text-white shadow-md"
+                                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
+                              }`}
+                            >
+                              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                                selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                              }`}>
+                                {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">
+                                  {chat.profile_name || `User ${chat.line_user_id.slice(-6)}`}
+                                </p>
+                                <p className={`truncate text-xs ${selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "text-white/80" : "text-gray-500"}`}>
+                                  {chat.last_message?.content || "No messages"}
+                                </p>
+                                {chat.assigned_admin_display_name && (
+                                  <p className={`truncate text-[10px] mt-0.5 ${selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "text-white/70" : "text-gray-400"}`}>
+                                    รับโดย: {chat.assigned_admin_display_name}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : loading ? (
           <div className="p-4 text-center text-gray-500">Loading...</div>
         ) : error ? (
@@ -285,7 +376,14 @@ export function Sidebar({
               : "ยังไม่มีแชท — ลูกค้าส่งข้อความมาจะปรากฏที่นี่"}
           </div>
         ) : (
-          <ul className="space-y-2 p-3">
+          <>
+            <div className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-xs font-semibold text-gray-500">มาจาก LINE</p>
+              <p className="truncate text-sm font-medium text-gray-900" title={channels.find((c) => c.id === selectedChannelId)?.name}>
+                {channels.find((c) => c.id === selectedChannelId)?.name ?? "—"}
+              </p>
+            </div>
+            <ul className="space-y-2 p-3">
             {chats.map((chat) => (
               <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
@@ -321,6 +419,7 @@ export function Sidebar({
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
     </aside>

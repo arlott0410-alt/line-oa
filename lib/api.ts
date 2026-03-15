@@ -32,9 +32,10 @@ async function fetchWithAuth(
   return res;
 }
 
-export async function fetchChannels() {
+export async function fetchChannels(options?: { nocache?: boolean }) {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${WORKER_URL}/channels`, { headers });
+  const url = options?.nocache ? `${WORKER_URL}/channels?nocache=1` : `${WORKER_URL}/channels`;
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error("Failed to fetch channels");
   return res.json();
 }
@@ -60,7 +61,7 @@ export async function fetchChats(channelId: string, options?: { assignedToMe?: b
 
 /** Batch multiple operations into one request */
 export async function fetchBatch(operations: Array<
-  | { method: "get_channels" }
+  | { method: "get_channels"; nocache?: boolean }
   | { method: "get_chats"; channel_id: string; assigned_to?: string; unread_only?: "1" }
 >) {
   const headers = await getAuthHeaders();

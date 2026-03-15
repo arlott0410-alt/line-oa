@@ -809,7 +809,7 @@ app.post("/batch", async (c) => {
   if (!authHeader?.startsWith("Bearer ")) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  let body: { operations: Array<{ method: string; channel_id?: string; assigned_to?: string; unread_only?: string }> };
+  let body: { operations: Array<{ method: string; channel_id?: string; assigned_to?: string; unread_only?: string; nocache?: boolean }> };
   try {
     body = await c.req.json();
   } catch {
@@ -824,7 +824,8 @@ app.post("/batch", async (c) => {
   const results: unknown[] = [];
   const promises = operations.map(async (op) => {
     if (op.method === "get_channels") {
-      const res = await fetch(`${baseUrl}/channels`, { headers });
+      const url = op.nocache ? `${baseUrl}/channels?nocache=1` : `${baseUrl}/channels`;
+      const res = await fetch(url, { headers });
       if (!res.ok) return { error: await res.text() };
       return res.json();
     }
