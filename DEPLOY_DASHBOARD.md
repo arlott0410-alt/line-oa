@@ -105,6 +105,8 @@ npm run deploy:workers
 
 ถ้าไม่ผูก KV ระบบยังทำงานได้ แค่ไม่แคช (โหลดจาก Supabase ทุกครั้ง)
 
+**⚠️ หลังผูก KV หรือกด Save and Deploy:** บางครั้ง Variables (SUPABASE_URL, SUPABASE_ANON_KEY) อาจหายหรือไม่ถูกส่งไปกับ deployment ใหม่ — เปิด **Settings → Variables and Secrets** ตรวจสอบว่าทั้งสองตัวยังอยู่และค่าถูกต้อง (ต้องเป็นของโปรเจกต์ Supabase นี้) แล้ว Save and Deploy อีกครั้งถ้าต้องแก้
+
 ### ขั้นตอนที่ 5: ตั้งค่า Compatibility
 
 1. ไปที่ **Settings** → **Compatibility**

@@ -278,9 +278,9 @@ export function Sidebar({
               {channelError}
             </p>
             <p className="text-center text-xs text-gray-500">
-              <strong>เรื่องสิทธิ์ (error 1042):</strong> เปิด Supabase → SQL Editor → รันไฟล์ <code className="bg-gray-100 px-1 rounded">supabase/fix_channels_1042.sql</code> (ใส่ role ให้ User ในตาราง user_roles)
+              <strong>Error 1042:</strong> เปิด Supabase → SQL Editor → รันตามขั้นตอนใน <code className="bg-gray-100 px-1 rounded">supabase/fix_channels_1042.sql</code>
               <br />
-              <strong>Worker:</strong> ต้องมี <strong>SUPABASE_URL</strong> และ <strong>SUPABASE_ANON_KEY</strong> ใน Cloudflare → Variables
+              (ถ้ามี role ครบแล้ว: ตรวจว่ามี function <code>get_my_role</code> และ Worker ใช้ <strong>SUPABASE_URL</strong> / <strong>SUPABASE_ANON_KEY</strong> ของโปรเจกต์นี้)
             </p>
             {onRefreshChannels && (
               <p className="text-center pt-2">

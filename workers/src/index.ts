@@ -617,7 +617,14 @@ app.get("/channels", async (c) => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("channels: Missing SUPABASE_URL or SUPABASE_ANON_KEY");
-    return c.json({ error: "Server config error" }, 500);
+    return c.json(
+      {
+        error: "Server config error",
+        detail:
+          "หลังผูก KV หรือ Deploy ใหม่ ตัวแปรอาจหาย — ไปที่ Cloudflare Worker → Settings → Variables and Secrets ตรวจสอบว่ามี SUPABASE_URL และ SUPABASE_ANON_KEY (ของโปรเจกต์ Supabase นี้)",
+      },
+      500
+    );
   }
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -639,7 +646,12 @@ app.get("/channels", async (c) => {
     if (cached) {
       try {
         const data = JSON.parse(cached);
-        return c.json(data);
+        if (Array.isArray(data)) {
+          return c.json(data);
+        }
+        if (data && typeof data === "object" && "error" in data) {
+          await kv.delete(CHANNELS_CACHE_KEY).catch(() => {});
+        }
       } catch {
         /* invalid cache, fall through */
       }
@@ -659,6 +671,7 @@ app.get("/channels", async (c) => {
   if (!res.ok) {
     const errText = await res.text();
     console.error("channels: Supabase REST error", res.status, errText);
+    if (kv) await kv.delete(CHANNELS_CACHE_KEY).catch(() => {});
     let detail = errText.slice(0, 280);
     try {
       const errJson = JSON.parse(errText) as { message?: string; code?: string };
@@ -667,10 +680,10 @@ app.get("/channels", async (c) => {
     } catch {
       /* ใช้ detail เดิม */
     }
-    const hint =
-      errText.includes("1042") || errText.includes("PGRST")
-        ? " แนะนำ: ตรวจสอบ RLS ใน Supabase และว่า User มี role ในตาราง user_roles"
-        : "";
+    let hint = "";
+    if (errText.includes("1042") || errText.includes("PGRST"))
+      hint += " แนะนำ: ตรวจสอบ RLS ใน Supabase และว่า User มี role ในตาราง user_roles";
+    hint += " ถ้าพึ่งผูก KV หรือ deploy ใหม่: ตรวจสอบ Worker → Settings → Variables (SUPABASE_URL, SUPABASE_ANON_KEY ต้องเป็นของโปรเจกต์นี้).";
     return c.json(
       { error: "Failed to fetch channels", detail: detail + hint },
       500
