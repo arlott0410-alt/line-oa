@@ -376,11 +376,6 @@ export function ChatPanel({
             <h3 className="font-medium text-gray-900 truncate">
               {selectedChat?.profile_name || `User ${selectedUserId?.slice(-8) || ""}`}
             </h3>
-            {selectedChat?.assigned_admin_id && (
-              <p className="text-xs text-muted-foreground truncate" title="คนรับแชท">
-                รับโดย: {selectedChat.assigned_admin_display_name || "—"}
-              </p>
-            )}
             {viewingNames.length > 0 && (
               <p className="text-[10px] text-emerald-600 truncate" title="กำลังดูหน้านี้อยู่">
                 กำลังดูอยู่: {viewingNames.join(", ")}
