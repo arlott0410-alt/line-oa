@@ -318,7 +318,7 @@ export default function UsersPage() {
           />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
           {loading ? (
             <div className="flex justify-center py-12 text-muted-foreground">
               Loading...
@@ -327,13 +327,14 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Resolved</TableHead>
-                  <TableHead>Avg response</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last Sign In</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
+                  <TableHead className="w-[140px]">ชื่อที่แสดง</TableHead>
+                  <TableHead className="min-w-[180px]">Email</TableHead>
+                  <TableHead className="w-[100px]">Role</TableHead>
+                  <TableHead className="w-[80px] text-right">Resolved</TableHead>
+                  <TableHead className="w-[90px] text-right">Avg (วินาที)</TableHead>
+                  <TableHead className="w-[100px]">สร้างเมื่อ</TableHead>
+                  <TableHead className="w-[100px]">ล็อกอินล่าสุด</TableHead>
+                  <TableHead className="w-[100px] text-right">การดำเนินการ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -341,35 +342,37 @@ export default function UsersPage() {
                   const m = metrics[u.id];
                   return (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">
-                      {u.display_name || "—"}
+                    <TableCell className="font-medium text-gray-900">
+                      {u.display_name?.trim() || "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                    <TableCell className="min-w-[180px] truncate text-sm text-muted-foreground" title={u.email}>
+                      {u.email}
+                    </TableCell>
                     <TableCell>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
                         {u.role}
                       </span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                       {m?.resolved_chats ?? "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                       {m?.avg_response_time_seconds != null
-                        ? `${m.avg_response_time_seconds}s`
+                        ? `${m.avg_response_time_seconds} วินาที`
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {u.created_at
-                        ? new Date(u.created_at).toLocaleDateString()
-                        : "-"}
+                        ? new Date(u.created_at).toLocaleDateString("th-TH")
+                        : "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {u.last_sign_in_at
-                        ? new Date(u.last_sign_in_at).toLocaleDateString()
-                        : "Never"}
+                        ? new Date(u.last_sign_in_at).toLocaleDateString("th-TH")
+                        : "—"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
                         <Dialog
                           open={editOpen === u.id}
                           onOpenChange={(o) =>
