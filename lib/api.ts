@@ -95,7 +95,7 @@ export async function fetchChatsFromSupabase(
     throw new Error(error.message || "Failed to fetch chats");
   }
   const list = Array.isArray(rows) ? rows : [];
-  const adminIds = [...new Set(list.map((r: { assigned_admin_id?: string | null }) => r.assigned_admin_id).filter(Boolean))] as string[];
+  const adminIds = Array.from(new Set(list.map((r: { assigned_admin_id?: string | null }) => r.assigned_admin_id).filter(Boolean))) as string[];
   let displayNames: Record<string, string> = {};
   if (adminIds.length > 0) {
     const { data: profiles } = await supabase.from("admin_profiles").select("user_id,display_name").in("user_id", adminIds);
