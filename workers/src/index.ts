@@ -1038,6 +1038,7 @@ app.get("/messages/:userId", async (c) => {
   const channelId = c.req.query("channel_id");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10) || 50, 100);
   const offset = parseInt(c.req.query("offset") || "0", 10) || 0;
+  const order = (c.req.query("order") as string) === "desc" ? "timestamp.desc" : "timestamp.asc";
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
@@ -1057,7 +1058,7 @@ app.get("/messages/:userId", async (c) => {
 
   if (authError) return c.json({ error: "Invalid token" }, 401);
 
-  const params = `channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type,replied_by&limit=${limit}&offset=${offset}`;
+  const params = `channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=${order}&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type,replied_by&limit=${limit}&offset=${offset}`;
   const res = await fetch(
     `${supabaseUrl}/rest/v1/messages?${params}`,
     {

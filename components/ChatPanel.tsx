@@ -15,7 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "http://localhost:8787";
-const PAGE_SIZE = 50;
+const INITIAL_PAGE_SIZE = 10;
+const LOAD_MORE_PAGE_SIZE = 10;
 
 function EscalationTrigger({
   channelId,
@@ -142,10 +143,9 @@ export function ChatPanel({
   const offsetRef = useRef(0);
   offsetRef.current = offset;
 
-  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
-  const firstUserMsgIndexInReversed = useMemo(
-    () => reversedMessages.findIndex((m) => m.sender_type === "user"),
-    [reversedMessages]
+  const firstUserMsgIndex = useMemo(
+    () => messages.findIndex((m) => m.sender_type === "user"),
+    [messages]
   );
 
   useEffect(() => {
@@ -195,14 +195,16 @@ export function ChatPanel({
   };
 
   const fetchMessages = useCallback(
-    async (silent = false, loadOffset = 0) => {
+    async (silent = false, loadOffset = 0, append = false) => {
       if (!selectedUserId || !selectedChannelId) return;
       if (loadOffset === 0 && !silent) setLoading(true);
       if (loadOffset > 0) setLoadingMore(true);
       setError("");
+      const limit = loadOffset === 0 ? INITIAL_PAGE_SIZE : LOAD_MORE_PAGE_SIZE;
+      const order = "desc";
       try {
         const res = await fetch(
-          `${WORKER_URL}/messages/${encodeURIComponent(selectedUserId)}?channel_id=${encodeURIComponent(selectedChannelId)}&limit=${PAGE_SIZE}&offset=${loadOffset}`,
+          `${WORKER_URL}/messages/${encodeURIComponent(selectedUserId)}?channel_id=${encodeURIComponent(selectedChannelId)}&limit=${limit}&offset=${loadOffset}&order=${order}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Failed to fetch messages");
@@ -210,11 +212,11 @@ export function ChatPanel({
         if (loadOffset === 0) {
           setMessages(data);
           setOffset(data.length);
-          setHasMore(data.length === PAGE_SIZE);
-        } else {
-          setMessages((prev) => [...data, ...prev]);
+          setHasMore(data.length === limit);
+        } else if (append) {
+          setMessages((prev) => [...prev, ...data]);
           setOffset((o) => o + data.length);
-          setHasMore(data.length === PAGE_SIZE);
+          setHasMore(data.length === limit);
         }
       } catch (err) {
         setError((err as Error).message);
@@ -238,12 +240,9 @@ export function ChatPanel({
     }
   }, [selectedUserId, selectedChannelId, token]);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || loadingMore || !hasMore) return;
-    if (el.scrollTop < 100) {
-      fetchMessages(true, offsetRef.current);
-    }
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    fetchMessages(true, offsetRef.current, true);
   }, [loadingMore, hasMore, fetchMessages]);
 
   useEffect(() => {
@@ -259,12 +258,11 @@ export function ChatPanel({
           filter: `channel_id=eq.${selectedChannelId}`,
         },
         (payload) => {
-          console.log("New message via realtime:", payload);
           const newMsg = payload.new as Message;
           if (newMsg.line_user_id === selectedUserId) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
+              return [newMsg, ...prev];
             });
           }
         }
@@ -279,7 +277,7 @@ export function ChatPanel({
 
   const prevNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
-    const newestId = messages.length > 0 ? messages[messages.length - 1]?.id ?? null : null;
+    const newestId = messages.length > 0 ? messages[0]?.id ?? null : null;
     if (newestId !== prevNewestIdRef.current) {
       prevNewestIdRef.current = newestId;
       scrollToLatest();
@@ -302,7 +300,7 @@ export function ChatPanel({
         imageUrl = await uploadImage(selectedChannelId, imageToSend);
       }
       await sendReply(selectedChannelId, selectedUserId, content || "", imageUrl);
-      await fetchMessages(true);
+      await fetchMessages(true, 0, false);
       onMessageSent?.();
     } catch (err) {
       setError((err as Error).message);
@@ -490,7 +488,6 @@ export function ChatPanel({
 
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
         className="flex-1 min-h-0 overflow-y-auto p-4"
       >
         {loading ? (
@@ -498,14 +495,26 @@ export function ChatPanel({
         ) : (
           <div className="space-y-3 flex flex-col">
             <div ref={messagesStartRef} />
-            {loadingMore && (
-              <div className="flex justify-center py-2 text-sm text-muted-foreground order-first">
-                Loading older messages...
+            {hasMore && (
+              <div className="flex justify-center py-2">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {loadingMore ? "กำลังโหลด..." : "โหลดเพิ่ม"}
+                </button>
               </div>
             )}
-            {reversedMessages.map((msg, idx) => {
+            {loadingMore && (
+              <div className="flex justify-center py-1 text-sm text-muted-foreground">
+                กำลังโหลดข้อความเก่า...
+              </div>
+            )}
+            {messages.map((msg, idx) => {
               const isCustomer = msg.sender_type === "user";
-              const isLastUserMessage = isCustomer && firstUserMsgIndexInReversed === idx;
+              const isLastUserMessage = isCustomer && firstUserMsgIndex === idx;
               const viewedAt = selectedChat?.viewed_by_admin_at ? new Date(selectedChat.viewed_by_admin_at).getTime() : 0;
               const msgTime = new Date(msg.timestamp).getTime();
               const showRead = isLastUserMessage && viewedAt >= msgTime;
@@ -592,7 +601,7 @@ export function ChatPanel({
 
       <form
         onSubmit={handleSend}
-        className="shrink-0 flex flex-col gap-2 border-t border-border bg-gray-50 p-3 sm:p-4"
+        className="shrink-0 flex flex-col gap-2 border-t border-border bg-gray-50 p-4"
       >
         {pendingImage && pendingImagePreview && (
           <div className="flex items-center gap-2">
@@ -642,8 +651,8 @@ export function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="พิมพ์ข้อความหรือส่งรูป..."
-            rows={1}
-            className="min-h-[44px] max-h-32 flex-1 resize-none rounded-2xl border border-gray-300 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] disabled:opacity-50 placeholder:text-gray-400"
+            rows={2}
+            className="min-h-[56px] max-h-40 flex-1 resize-none rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-base outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] disabled:opacity-50 placeholder:text-gray-400"
             disabled={sending || !canReply}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
