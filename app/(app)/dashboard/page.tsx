@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { fetchBatch, fetchChannelsFromSupabase, fetchQueue as fetchQueueApi } from "@/lib/api";
+import { fetchBatch, fetchChannelsFromSupabase, fetchQueue as fetchQueueApi, type ChatFilterMode } from "@/lib/api";
 import { Sidebar, type QueueItem } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -47,8 +47,7 @@ export default function DashboardPage() {
   const [session, setSession] = useState<{ access_token: string; user?: { id: string } } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
-  const [showMyChatsOnly, setShowMyChatsOnly] = useState(false);
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [chatFilter, setChatFilter] = useState<ChatFilterMode>("all");
   const [canClaim, setCanClaim] = useState(false);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [adminStatus, setAdminStatus] = useState<"available" | "busy" | "offline">("offline");
@@ -179,8 +178,7 @@ export default function DashboardPage() {
       const operations = channels.map((ch) => ({
         method: "get_chats" as const,
         channel_id: ch.id,
-        ...(showMyChatsOnly ? { assigned_to: "me" as const } : {}),
-        ...(showUnreadOnly ? { unread_only: "1" as const } : {}),
+        ...(chatFilter === "unread" ? { unread_only: "1" as const } : chatFilter !== "all" ? { status: chatFilter } : {}),
         ...(opts?.nocache ? { nocache: true as const } : {}),
       }));
       const results = await fetchBatch(operations);
@@ -195,7 +193,7 @@ export default function DashboardPage() {
     } finally {
       setAllChannelsLoading(false);
     }
-  }, [session, channels, showMyChatsOnly, showUnreadOnly]);
+  }, [session, channels, chatFilter]);
 
   useEffect(() => {
     if (selectedChannelId === ALL_CHANNELS_ID && channels.length > 0) {
@@ -366,10 +364,8 @@ export default function DashboardPage() {
           token={session.access_token}
           channelError={channelError}
           onRefreshChannels={() => loadChannelsAndMaybeChats({ nocache: true })}
-          showMyChatsOnly={showMyChatsOnly}
-          onMyChatsToggle={setShowMyChatsOnly}
-          showUnreadOnly={showUnreadOnly}
-          onUnreadToggle={setShowUnreadOnly}
+          chatFilter={chatFilter}
+          onChatFilterChange={setChatFilter}
           canClaim={canClaim}
           queueItems={queueItems}
           onClaim={handleClaim}

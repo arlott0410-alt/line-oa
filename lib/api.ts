@@ -134,11 +134,19 @@ export async function fetchChatsFromSupabase(
   }));
 }
 
-export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean; nocache?: boolean }) {
+export type ChatFilterMode = "all" | "unread" | "in_progress" | "resolved";
+
+export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean; status?: ChatFilterMode; nocache?: boolean }) {
   const headers = await getAuthHeaders();
   let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`;
-  if (options?.assignedToMe) url += "&assigned_to=me";
-  if (options?.unreadOnly) url += "&unread_only=1";
+  if (options?.status && options.status !== "all") {
+    if (options.status === "unread") url += "&unread_only=1";
+    else if (options.status === "in_progress") url += "&status=in_progress";
+    else if (options.status === "resolved") url += "&status=resolved";
+  } else {
+    if (options?.assignedToMe) url += "&assigned_to=me";
+    if (options?.unreadOnly) url += "&unread_only=1";
+  }
   if (options?.nocache) url += "&nocache=1";
   const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
@@ -162,7 +170,7 @@ export async function fetchChats(channelId: string, options?: { assignedToMe?: b
 /** Batch multiple operations into one request */
 export async function fetchBatch(operations: Array<
   | { method: "get_channels"; nocache?: boolean }
-  | { method: "get_chats"; channel_id: string; assigned_to?: string; unread_only?: "1"; nocache?: boolean }
+  | { method: "get_chats"; channel_id: string; assigned_to?: string; unread_only?: "1"; status?: string; nocache?: boolean }
 >) {
   const headers = await getAuthHeaders();
   const res = await fetch(`${WORKER_URL}/batch`, {

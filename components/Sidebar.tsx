@@ -7,6 +7,7 @@ import debounce from "lodash/debounce";
 import { CircleDot, Clock, CircleOff, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import type { ChatFilterMode } from "@/lib/api";
 import type { ChatUser, Channel } from "@/app/(app)/dashboard/page";
 
 export interface QueueItem {
@@ -40,10 +41,8 @@ interface SidebarProps {
   token: string;
   channelError?: string | null;
   onRefreshChannels?: () => void;
-  showMyChatsOnly?: boolean;
-  onMyChatsToggle?: (value: boolean) => void;
-  showUnreadOnly?: boolean;
-  onUnreadToggle?: (value: boolean) => void;
+  chatFilter?: ChatFilterMode;
+  onChatFilterChange?: (value: ChatFilterMode) => void;
   canClaim?: boolean;
   queueItems?: QueueItem[];
   onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
@@ -75,10 +74,8 @@ export function Sidebar({
   token,
   channelError,
   onRefreshChannels,
-  showMyChatsOnly = false,
-  onMyChatsToggle,
-  showUnreadOnly = false,
-  onUnreadToggle,
+  chatFilter = "all",
+  onChatFilterChange,
   canClaim = false,
   queueItems = [],
   onClaim,
@@ -100,8 +97,7 @@ export function Sidebar({
     setError("");
     try {
       const data = await fetchChats(selectedChannelId, {
-        assignedToMe: showMyChatsOnly || showUnreadOnly,
-        unreadOnly: showUnreadOnly,
+        status: chatFilter,
         nocache: opts?.nocache,
       });
       setChats(Array.isArray(data) ? data : []);
@@ -112,7 +108,7 @@ export function Sidebar({
     } finally {
       setLoading(false);
     }
-  }, [selectedChannelId, showMyChatsOnly, showUnreadOnly]);
+  }, [selectedChannelId, chatFilter]);
 
   const debouncedLoadChats = useMemo(
     () => debounce(loadChats, 300),
@@ -131,7 +127,7 @@ export function Sidebar({
       debouncedLoadChats();
     }
     return () => debouncedLoadChats.cancel();
-  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats, refreshChatListKey, loadChats]);
+  }, [selectedChannelId, token, chatFilter, debouncedLoadChats, refreshChatListKey, loadChats]);
 
   useEffect(() => {
     if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) return;
@@ -229,45 +225,35 @@ export function Sidebar({
             ))}
           </select>
         )}
-        {selectedChannelId && (onMyChatsToggle != null || onUnreadToggle != null) && (
+        {selectedChannelId && onChatFilterChange != null && (
           <div className="mt-2 space-y-1.5">
             <p className="text-xs font-semibold text-gray-700">กรองแชท</p>
             <div className="flex gap-1 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  onMyChatsToggle?.(false);
-                  onUnreadToggle?.(false);
-                }}
-                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${!showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                title="แชททั้งหมดใน channel (รวมที่ยังไม่มีคนรับ)"
-              >
-                ทั้งหมด
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onMyChatsToggle?.(true);
-                  onUnreadToggle?.(false);
-                }}
-                disabled={!canClaim}
-                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${showMyChatsOnly && !showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} ${!canClaim ? "opacity-60 cursor-not-allowed" : ""}`}
-                title={canClaim ? "แชทที่คุณกดรับไว้แล้ว — ใช้ดูแชทที่รับผิดชอบอยู่" : "ต้องมีสิทธิ์รับแชท"}
-              >
-                รับไว้แล้ว
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onMyChatsToggle?.(true);
-                  onUnreadToggle?.(true);
-                }}
-                disabled={!canClaim}
-                className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${showUnreadOnly ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} ${!canClaim ? "opacity-60 cursor-not-allowed" : ""}`}
-                title={canClaim ? "แชทที่ลูกค้าส่งมาล่าสุดและยังไม่ได้เปิดดู — ตอบด่วน" : "ต้องมีสิทธิ์รับแชท"}
-              >
-                ยังไม่อ่าน
-              </button>
+              {(["all", "unread", "in_progress", "resolved"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onChatFilterChange(mode)}
+                  className={`flex-1 min-w-[4rem] rounded px-2 py-1.5 text-xs font-medium transition ${chatFilter === mode ? "bg-[#06C755] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  title={
+                    mode === "all"
+                      ? "แชททั้งหมด"
+                      : mode === "unread"
+                      ? "แชทที่ลูกค้าส่งมาและยังไม่ได้เปิดดู"
+                      : mode === "in_progress"
+                      ? "แชทที่กำลังดำเนินการ (มีคนรับแล้ว)"
+                      : "แชทที่จบเคสแล้ว"
+                  }
+                >
+                  {mode === "all"
+                    ? "ทั้งหมด"
+                    : mode === "unread"
+                    ? "ยังไม่อ่าน"
+                    : mode === "in_progress"
+                    ? "ดำเนินการ"
+                    : "เสร็จสิ้น"}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -454,10 +440,12 @@ export function Sidebar({
               <MessageCircle className="h-12 w-12 text-gray-300" strokeWidth={1.2} />
               <p className="text-sm font-medium text-gray-700">No conversations in this channel yet</p>
               <p className="text-xs text-gray-500">
-                {showUnreadOnly
+                {chatFilter === "unread"
                   ? "ไม่มีแชทที่ยังไม่อ่าน"
-                  : showMyChatsOnly
-                  ? "ยังไม่มีแชทที่รับไว้ — ไปที่ Queue หรือกด รับ ในคิวรอรับด้านบน"
+                  : chatFilter === "in_progress"
+                  ? "ไม่มีแชทที่กำลังดำเนินการ"
+                  : chatFilter === "resolved"
+                  ? "ไม่มีแชทที่เสร็จสิ้น"
                   : "Send a message via Line OA to start chatting."}
               </p>
               <button

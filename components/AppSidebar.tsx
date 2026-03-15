@@ -19,7 +19,17 @@ const ALL_NAV_ITEMS = [
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("sidebar-collapsed") !== "false";
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  };
   const [role, setRole] = useState<UserRole | null>(null);
   const [displayName, setDisplayName] = useState<string>("");
 
@@ -55,7 +65,7 @@ export function AppSidebar() {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
         >
           {collapsed ? (
             <PanelLeft className="h-4 w-4" />

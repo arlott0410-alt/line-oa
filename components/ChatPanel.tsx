@@ -366,11 +366,11 @@ export function ChatPanel({
                 toast.error(error.message);
                 return;
               }
-              toast.success("จบเคสแล้ว — แชทจะหายจาก รับไว้แล้ว");
+              toast.success("จบเคสแล้ว — แชทจะไปที่ เสร็จสิ้น");
               onResolve(selectedChannelId, selectedUserId);
             }}
             className="shrink-0 flex items-center gap-1.5 rounded bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
-            title="จบเคส — เอาแชทออกจาก รับไว้แล้ว"
+            title="จบเคส — ย้ายแชทไปที่เสร็จสิ้น"
           >
             <CheckCircle2 className="h-4 w-4" />
             จบเคส
