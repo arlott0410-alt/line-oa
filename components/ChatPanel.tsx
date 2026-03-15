@@ -143,10 +143,17 @@ export function ChatPanel({
   const offsetRef = useRef(0);
   offsetRef.current = offset;
 
-  const firstUserMsgIndex = useMemo(
-    () => messages.findIndex((m) => m.sender_type === "user"),
-    [messages]
-  );
+  const displayMessages = useMemo(() => [...messages].reverse(), [messages]);
+  const lastUserMsgIndexInDisplay = useMemo(() => {
+    let idx = -1;
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      if (displayMessages[i].sender_type === "user") {
+        idx = i;
+        break;
+      }
+    }
+    return idx;
+  }, [displayMessages]);
 
   useEffect(() => {
     canSendMessages().then(setCanReply);
@@ -191,7 +198,7 @@ export function ChatPanel({
   }, [selectedChannelId, selectedUserId, currentAdminId, currentAdminDisplayName]);
 
   const scrollToLatest = () => {
-    messagesStartRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const fetchMessages = useCallback(
@@ -283,6 +290,9 @@ export function ChatPanel({
       scrollToLatest();
     }
   }, [messages]);
+  useEffect(() => {
+    if (!loading && messages.length > 0) scrollToLatest();
+  }, [loading]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -488,33 +498,32 @@ export function ChatPanel({
 
       <div
         ref={scrollRef}
-        className="flex-1 min-h-0 overflow-y-auto p-4"
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 bg-[#f7f7f7]"
       >
         {loading ? (
           <div className="flex justify-center py-8 text-muted-foreground">Loading...</div>
         ) : (
-          <div className="space-y-3 flex flex-col">
-            <div ref={messagesStartRef} />
+          <div className="space-y-2 flex flex-col">
             {hasMore && (
-              <div className="flex justify-center py-2">
+              <div className="flex justify-center py-2 shrink-0">
                 <button
                   type="button"
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 shadow-sm"
                 >
                   {loadingMore ? "กำลังโหลด..." : "โหลดเพิ่ม"}
                 </button>
               </div>
             )}
             {loadingMore && (
-              <div className="flex justify-center py-1 text-sm text-muted-foreground">
+              <div className="flex justify-center py-1 text-sm text-muted-foreground shrink-0">
                 กำลังโหลดข้อความเก่า...
               </div>
             )}
-            {messages.map((msg, idx) => {
+            {displayMessages.map((msg, idx) => {
               const isCustomer = msg.sender_type === "user";
-              const isLastUserMessage = isCustomer && firstUserMsgIndex === idx;
+              const isLastUserMessage = isCustomer && lastUserMsgIndexInDisplay === idx;
               const viewedAt = selectedChat?.viewed_by_admin_at ? new Date(selectedChat.viewed_by_admin_at).getTime() : 0;
               const msgTime = new Date(msg.timestamp).getTime();
               const showRead = isLastUserMessage && viewedAt >= msgTime;
@@ -536,10 +545,10 @@ export function ChatPanel({
                       </span>
                     )}
                     <div
-                      className={`rounded-2xl px-4 py-2 shadow-sm ${
+                      className={`rounded-2xl px-4 py-2.5 shadow-sm max-w-[85%] ${
                         isCustomer
-                          ? "rounded-bl-md bg-gray-100 text-gray-900"
-                          : "rounded-br-md bg-[#06C755] text-white"
+                          ? "rounded-tl-sm rounded-bl-2xl rounded-br-2xl bg-white text-gray-900 border border-gray-100"
+                          : "rounded-tr-sm rounded-bl-2xl rounded-br-2xl bg-[#06C755] text-white"
                       }`}
                     >
                       {(msg.image_original_url || msg.image_preview_url) ? (
@@ -582,7 +591,7 @@ export function ChatPanel({
                 </div>
               );
             })}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="min-h-1" />
           </div>
         )}
       </div>
