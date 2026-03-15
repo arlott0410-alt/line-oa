@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 const STORAGE_KEY_LAST_CHANNEL = "line-oa-last-channel";
-const ALL_CHANNELS_ID = "__all__";
 
 export interface ChatUser {
   id: string;
@@ -52,8 +51,6 @@ export default function DashboardPage() {
   const [openChats, setOpenChats] = useState<Array<{ id: string; channelId: string; userId: string; chat: ChatUser }>>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [chatsByChannel, setChatsByChannel] = useState<Record<string, ChatUser[]>>({});
-  const [allChannelsLoading, setAllChannelsLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [refreshChatListKey, setRefreshChatListKey] = useState(0);
 
@@ -77,7 +74,7 @@ export default function DashboardPage() {
     const ops: Array<{ method: "get_channels"; nocache?: boolean } | { method: "get_chats"; channel_id: string }> = [
       { method: "get_channels", ...(options?.nocache ? { nocache: true } : {}) },
     ];
-    if (lastChannelId) ops.push({ method: "get_chats", channel_id: lastChannelId });
+    if (lastChannelId && lastChannelId !== "__all__") ops.push({ method: "get_chats", channel_id: lastChannelId });
     try {
       const results = await fetchBatch(ops);
       const first = results[0];
@@ -113,13 +110,13 @@ export default function DashboardPage() {
       const channelsData = Array.isArray(first) ? first : [];
       setChannels(channelsData);
       if (channelsData.length > 0) {
-        setSelectedChannelId((prev) => {
-          if (prev) return prev;
-          if (lastChannelId === ALL_CHANNELS_ID) return ALL_CHANNELS_ID;
-          if (lastChannelId && channelsData.some((c: { id: string }) => c.id === lastChannelId))
-            return lastChannelId;
-          return channelsData[0].id;
-        });
+        const validChannelId =
+          lastChannelId && channelsData.some((c: { id: string }) => c.id === lastChannelId)
+            ? lastChannelId
+            : channelsData[0].id;
+        setSelectedChannelId((prev) => prev || validChannelId);
+        if (typeof window !== "undefined" && lastChannelId === "__all__")
+          localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, validChannelId);
       }
       if (channelsData.length === 0) setShowOnboarding(true);
     } catch (err) {
@@ -156,38 +153,6 @@ export default function DashboardPage() {
       if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY_LAST_CHANNEL, firstId);
     }
   }, [channels, selectedChannelId]);
-
-  const loadAllChannelsChats = useCallback(async (opts?: { nocache?: boolean }) => {
-    if (!session || channels.length === 0) return;
-    setAllChannelsLoading(true);
-    try {
-      const operations = channels.map((ch) => ({
-        method: "get_chats" as const,
-        channel_id: ch.id,
-        ...(chatFilter === "unread" ? { unread_only: "1" as const } : chatFilter !== "all" ? { status: chatFilter } : {}),
-        ...(opts?.nocache ? { nocache: true as const } : {}),
-      }));
-      const results = await fetchBatch(operations);
-      const byChannel: Record<string, ChatUser[]> = {};
-      channels.forEach((ch, i) => {
-        const data = results[i];
-        byChannel[ch.id] = Array.isArray(data) ? data : [];
-      });
-      setChatsByChannel(byChannel);
-    } catch {
-      setChatsByChannel({});
-    } finally {
-      setAllChannelsLoading(false);
-    }
-  }, [session, channels, chatFilter]);
-
-  useEffect(() => {
-    if (selectedChannelId === ALL_CHANNELS_ID && channels.length > 0) {
-      loadAllChannelsChats(refreshChatListKey > 0 ? { nocache: true } : undefined);
-    } else {
-      setChatsByChannel({});
-    }
-  }, [selectedChannelId, channels.length, loadAllChannelsChats, refreshChatListKey]);
 
   const addOrFocusChat = (channelId: string, userId: string, chat: ChatUser) => {
     const id = `${channelId}-${userId}`;
@@ -267,8 +232,6 @@ export default function DashboardPage() {
             setSelectedUserId(null);
             setSelectedChat(null);
           }}
-          chatsByChannel={selectedChannelId === ALL_CHANNELS_ID ? chatsByChannel : undefined}
-          allChannelsLoading={allChannelsLoading}
           channelsLoading={channelsLoading}
           selectedChat={selectedChat}
           onSelectUser={(id) => {
@@ -279,7 +242,7 @@ export default function DashboardPage() {
             setSelectedChat(chat);
             if (chat) {
               const chId = chat.channel_id ?? selectedChannelId;
-              if (chId && chId !== ALL_CHANNELS_ID) addOrFocusChat(chId, chat.line_user_id, chat);
+              if (chId) addOrFocusChat(chId, chat.line_user_id, chat);
             }
           }}
           token={session.access_token}
@@ -313,14 +276,10 @@ export default function DashboardPage() {
           {openChats.length === 0 ? (
             <ChatPanel
               selectedUserId={selectedUserId}
-              selectedChannelId={
-                selectedChannelId === ALL_CHANNELS_ID
-                  ? (selectedChat?.channel_id ?? null)
-                  : selectedChannelId
-              }
+              selectedChannelId={selectedChannelId}
               selectedChannelName={
-                channels.length > 1 && (selectedChannelId === ALL_CHANNELS_ID ? selectedChat?.channel_id : selectedChannelId)
-                  ? channels.find((c) => c.id === (selectedChannelId === ALL_CHANNELS_ID ? selectedChat?.channel_id : selectedChannelId))?.name ?? null
+                selectedChannelId && channels.length > 1
+                  ? channels.find((c) => c.id === selectedChannelId)?.name ?? null
                   : null
               }
               selectedChat={selectedChat}

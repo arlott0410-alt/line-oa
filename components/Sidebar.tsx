@@ -21,19 +21,13 @@ export interface QueueItem {
   last_message: { content: string; timestamp: string } | null;
 }
 
-const ALL_CHANNELS_ID = "__all__";
-
 interface SidebarProps {
   /** เปลี่ยนค่าเมื่อต้องการให้รายการแชทโหลดใหม่ (เช่น หลัง mark อ่านแล้ว) */
   refreshChatListKey?: number;
   selectedUserId: string | null;
   selectedChannelId: string | null;
   channels: Channel[];
-  /** เมื่อเลือก "ทั้งหมดทุก LINE" จะส่ง object แชทแยกตาม channel_id */
-  chatsByChannel?: Record<string, ChatUser[]>;
-  allChannelsLoading?: boolean;
   channelsLoading?: boolean;
-  /** แชทที่กำลังเลือก (ใช้ไฮไลต์ในโหมดทั้งหมดทุก LINE) */
   selectedChat?: ChatUser | null;
   onSelectChannel: (channelId: string) => void;
   onSelectUser: (userId: string | null) => void;
@@ -59,8 +53,6 @@ export function Sidebar({
   selectedUserId,
   selectedChannelId,
   channels,
-  chatsByChannel,
-  allChannelsLoading = false,
   channelsLoading = false,
   selectedChat,
   onSelectChannel,
@@ -78,7 +70,7 @@ export function Sidebar({
   const [error, setError] = useState("");
 
   const loadChats = useCallback(async (opts?: { nocache?: boolean }) => {
-    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) {
+    if (!selectedChannelId) {
       setChats([]);
       setLoading(false);
       return;
@@ -106,7 +98,7 @@ export function Sidebar({
   );
 
   useEffect(() => {
-    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) {
+    if (!selectedChannelId) {
       setChats([]);
       setLoading(false);
       return;
@@ -120,20 +112,19 @@ export function Sidebar({
   }, [selectedChannelId, token, chatFilter, debouncedLoadChats, refreshChatListKey, loadChats]);
 
   useEffect(() => {
-    if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) return;
+    if (!selectedChannelId) return;
     const channel = supabase
       .channel(`sidebar-updates-${selectedChannelId}`)
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "messages",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        (payload) => {
-          console.log("New message via realtime:", payload);
-          loadChats();
+        () => {
+          loadChats({ nocache: true });
         }
       )
       .on(
@@ -144,9 +135,8 @@ export function Sidebar({
           table: "line_users",
           filter: `channel_id=eq.${selectedChannelId}`,
         },
-        (payload) => {
-          console.log("New message via realtime (line_users):", payload);
-          loadChats();
+        () => {
+          loadChats({ nocache: true });
         }
       )
       .subscribe((status, err) => {
@@ -175,7 +165,6 @@ export function Sidebar({
             onChange={(e) => onSelectChannel(e.target.value)}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#06C755] focus:outline-none focus:ring-2 focus:ring-[#06C755]/20"
           >
-            <option value={ALL_CHANNELS_ID}>ทั้งหมดทุก LINE</option>
             {channels.map((ch) => (
               <option key={ch.id} value={ch.id}>
                 {ch.name}
@@ -263,89 +252,6 @@ export function Sidebar({
               </button>
             )}
           </div>
-        ) : selectedChannelId === ALL_CHANNELS_ID ? (
-          allChannelsLoading ? (
-            <div className="p-4 text-center text-gray-500">Loading...</div>
-          ) : (
-            <div className="flex-1 overflow-y-auto">
-              {channels.map((ch) => {
-                const list = chatsByChannel?.[ch.id] ?? [];
-                return (
-                  <div key={ch.id} className="border-b border-gray-200">
-                    <div className="sticky top-0 z-10 bg-gray-100 px-3 py-2">
-                      <p className="text-xs font-semibold text-gray-500">มาจาก LINE</p>
-                      <p className="truncate text-sm font-medium text-gray-900">{ch.name}</p>
-                    </div>
-                    <ul className="space-y-2 p-3">
-                      {list.length === 0 ? (
-                        <li className="py-4 text-center text-gray-400 flex flex-col items-center gap-1">
-                          <MessageCircle className="h-8 w-8 text-gray-300" strokeWidth={1.2} />
-                          <span className="text-xs">No conversations yet in this channel.</span>
-                        </li>
-                      ) : (
-                        list.map((chat) => {
-                          const channelColor = getChannelColor(ch.id);
-                          const isSelected = selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id;
-                          const isUnread = chat.last_message?.sender_type === "user" && (!chat.viewed_by_admin_at || new Date(chat.viewed_by_admin_at) < new Date(chat.last_message?.timestamp ?? 0));
-                          return (
-                          <li key={`${chat.channel_id}-${chat.line_user_id}`}>
-                            <button
-                              onClick={() => {
-                                onSelectUser(chat.line_user_id);
-                                onSelectChat?.(chat);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all duration-200 ${
-                                isSelected
-                                  ? "border-[#06C755] bg-[#06C755] text-white shadow-md"
-                                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
-                              }`}
-                              style={!isSelected ? { borderLeftWidth: "4px", borderLeftColor: channelColor } : undefined}
-                            >
-                              <div className="relative shrink-0">
-                                <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium ${
-                                  isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
-                                }`}>
-                                  {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
-                                </div>
-                                {isUnread && (
-                                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#06C755] border-2 border-white" aria-hidden />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <span
-                                  className="mb-0.5 inline-block truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
-                                  style={
-                                    isSelected
-                                      ? { backgroundColor: "rgba(255,255,255,0.25)", color: "white" }
-                                      : { backgroundColor: channelColor.replace(/\)$/, ", 0.15)").replace(/^hsl\(/, "hsla("), color: channelColor }
-                                  }
-                                  title={ch.name}
-                                >
-                                  {ch.name}
-                                </span>
-                                <p className="truncate font-medium">
-                                  {chat.profile_name || `User ${chat.line_user_id.slice(-6)}`}
-                                </p>
-                                <p className={`truncate text-xs ${isSelected ? "text-white/80" : "text-gray-500"}`}>
-                                  {chat.last_message?.content || "No messages"}
-                                </p>
-                                {chat.assigned_admin_display_name && (
-                                  <p className={`truncate text-[10px] mt-0.5 ${isSelected ? "text-white/70" : "text-gray-400"}`}>
-                                    รับโดย: {chat.assigned_admin_display_name}
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-                          </li>
-                          );
-                        })
-                      )}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-          )
         ) : loading ? (
           <div className="p-4 space-y-3">
             {[1, 2, 3, 4].map((i) => (
