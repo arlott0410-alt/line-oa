@@ -331,7 +331,7 @@ app.get("/webhook", (c) => c.json({ ok: true }));
 
 // GET /health และ GET /webhook/health - ตรวจสอบว่า Worker ทำงานและเชื่อมต่อ Supabase ได้
 async function healthHandler(c: Context<{ Bindings: Env }>) {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   if (!supabaseUrl || !supabaseServiceKey) {
     return c.json({ ok: false, error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }, 500);
@@ -361,7 +361,7 @@ app.get("/webhook/health", healthHandler);
 
 // POST /webhook - Line webhook (route by destination = bot_user_id)
 app.post("/webhook", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -575,7 +575,7 @@ app.post("/webhook", async (c) => {
 
 // POST /line/bot-info - ดึง Bot User ID จาก LINE API (super_admin only, ใช้เมื่อ Add Channel)
 app.post("/line/bot-info", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
@@ -610,7 +610,7 @@ const CHATS_CACHE_TTL = 60; // 1 min
 
 // GET /channels - List channels (auth required, cached in KV)
 app.get("/channels", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const kv = c.env.CACHE_KV;
   const authHeader = c.req.header("Authorization");
@@ -659,8 +659,20 @@ app.get("/channels", async (c) => {
   if (!res.ok) {
     const errText = await res.text();
     console.error("channels: Supabase REST error", res.status, errText);
+    let detail = errText.slice(0, 280);
+    try {
+      const errJson = JSON.parse(errText) as { message?: string; code?: string };
+      if (errJson.message) detail = errJson.message;
+      if (errJson.code) detail = `error code: ${errJson.code}${detail ? ` — ${detail}` : ""}`;
+    } catch {
+      /* ใช้ detail เดิม */
+    }
+    const hint =
+      errText.includes("1042") || errText.includes("PGRST")
+        ? " แนะนำ: ตรวจสอบ RLS ใน Supabase และว่า User มี role ในตาราง user_roles"
+        : "";
     return c.json(
-      { error: "Failed to fetch channels", detail: errText.slice(0, 200) },
+      { error: "Failed to fetch channels", detail: detail + hint },
       500
     );
   }
@@ -676,7 +688,7 @@ app.post("/cache/invalidate", async (c) => {
   const kv = c.env.CACHE_KV;
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const token = authHeader.slice(7);
   const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -703,7 +715,7 @@ app.get("/chats", async (c) => {
   const channelId = c.req.query("channel_id");
   const assignedToMe = c.req.query("assigned_to") === "me";
   const unreadOnly = c.req.query("unread_only") === "1";
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const kv = c.env.CACHE_KV;
   const authHeader = c.req.header("Authorization");
@@ -845,7 +857,7 @@ app.post("/batch", async (c) => {
 
 // GET /queue - Unassigned chats (admin+ only)
 app.get("/queue", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
 
@@ -918,7 +930,7 @@ app.get("/queue", async (c) => {
 
 // POST /queue/assign - Bulk assign chats to current admin
 app.post("/queue/assign", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -971,7 +983,7 @@ app.get("/messages/:userId", async (c) => {
   const channelId = c.req.query("channel_id");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10) || 50, 100);
   const offset = parseInt(c.req.query("offset") || "0", 10) || 0;
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
 
@@ -1007,7 +1019,7 @@ app.get("/messages/:userId", async (c) => {
 
 // POST /upload-image - อัปโหลดรูปสำหรับส่งให้ลูกค้า (auth required)
 app.post("/upload-image", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
   const token = authHeader.slice(7);
@@ -1058,7 +1070,7 @@ app.post("/upload-image", async (c) => {
 
 // POST /reply - Require channel_id, get access_token from DB (รองรับ text และ/หรือ image)
 app.post("/reply", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -1175,7 +1187,7 @@ app.post("/reply", async (c) => {
 
 // GET /admin/colleagues - List admin+super_admin for transfer (admin+ can use, แสดงเพื่อนที่ส่งแชทได้)
 app.get("/admin/colleagues", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
@@ -1240,7 +1252,7 @@ app.get("/admin/colleagues", async (c) => {
 
 // GET /admin/users - List users with roles (super_admin only)
 app.get("/admin/users", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -1303,7 +1315,7 @@ app.get("/admin/users", async (c) => {
 
 // GET /admin/metrics - resolved_chats, avg_response_time per admin (super_admin only)
 app.get("/admin/metrics", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
@@ -1373,7 +1385,7 @@ app.get("/admin/metrics", async (c) => {
 
 // POST /admin/users - Create user (super_admin only)
 app.post("/admin/users", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const authHeader = c.req.header("Authorization");
@@ -1434,7 +1446,7 @@ app.post("/admin/users", async (c) => {
 
 // PATCH /admin/users/:uid/role - Update role (super_admin only)
 app.patch("/admin/users/:uid/role", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const uid = c.req.param("uid");
   const authHeader = c.req.header("Authorization");
@@ -1486,7 +1498,7 @@ app.patch("/admin/users/:uid/role", async (c) => {
 
 // PATCH /admin/users/:uid/password - Change user password (super_admin only)
 app.patch("/admin/users/:uid/password", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const uid = c.req.param("uid");
   const authHeader = c.req.header("Authorization");
@@ -1527,7 +1539,7 @@ app.patch("/admin/users/:uid/password", async (c) => {
 
 // DELETE /admin/users/:uid - Delete user (super_admin only)
 app.delete("/admin/users/:uid", async (c) => {
-  const supabaseUrl = c.env.SUPABASE_URL as string;
+  const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
   const supabaseServiceKey = c.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const uid = c.req.param("uid");

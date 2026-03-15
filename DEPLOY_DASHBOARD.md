@@ -80,7 +80,7 @@ npm run deploy:workers
 
 | Name | Value |
 |------|-------|
-| `SUPABASE_URL` | URL โปรเจกต์ Supabase (เช่น https://xxx.supabase.co) — หรือใส่ใน wrangler.toml |
+| `SUPABASE_URL` | URL โปรเจกต์ Supabase (เช่น https://xxx.supabase.co) — หรือใส่ใน wrangler.toml (ถ้าตั้งชื่อผิดเป็น `SUPABASE_URI` ระบบจะใช้แทนได้) |
 | `SUPABASE_ANON_KEY` | Anon key จาก Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key จาก Supabase |
 | `R2_PUBLIC_BASE_URL` | (Optional) Public URL ของ R2 bucket สำหรับรูปภาพ เช่น `https://pub-xxx.r2.dev` |
@@ -88,6 +88,16 @@ npm run deploy:workers
 **หมายเหตุ:** Credentials ของ Line OA เก็บใน DB (channels table) ไม่ต้องใส่ใน Worker
 
 **รูปภาพ (R2):** ถ้าต้องการเก็บรูปที่ user ส่งมา ต้องสร้าง R2 bucket → Settings → R2 bucket bindings → Add `IMAGES_BUCKET` → ใส่ `R2_PUBLIC_BASE_URL` เป็น Secret (ดู README ส่วน "R2 Setup for Images")
+
+**KV (แคชรายการช่อง/แชท):** ถ้าต้องการให้แคช channels/chats ทำงาน ต้องผูก KV namespace ใน Dashboard ด้วย (การ deploy แบบ copy-paste หรือจาก Git **ไม่ดึง Binding จาก wrangler.toml** จึงต้องเพิ่มเอง):
+
+1. ไปที่ Worker → **Settings** → **Bindings** → **Add binding**
+2. เลือก **KV namespace**
+3. **Variable name**: `CACHE_KV` (ต้องตรงนี้)
+4. **KV namespace**: เลือก namespace ที่มี id = `699aafaa26b546f6a4b18462da60f21b` (หรือสร้างใหม่แล้วใช้ id นั้น)
+5. Save
+
+ถ้าไม่ผูก KV ระบบยังทำงานได้ แค่ไม่แคช (โหลดจาก Supabase ทุกครั้ง)
 
 ### ขั้นตอนที่ 5: ตั้งค่า Compatibility
 

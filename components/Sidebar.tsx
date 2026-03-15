@@ -278,14 +278,14 @@ export function Sidebar({
               {channelError}
             </p>
             <p className="text-center text-xs text-gray-500">
-              ตรวจสอบ: Worker มี SUPABASE_URL, รัน migrations ใน Supabase, User มี role ใน user_roles
+              ตรวจสอบ: ใน Cloudflare Worker → Variables ต้องมี <strong>SUPABASE_URL</strong> และ <strong>SUPABASE_ANON_KEY</strong> (ถ้าตั้งเป็น SUPABASE_URI ระบบจะใช้แทนได้), รัน migrations ใน Supabase, และ User มี role ในตาราง user_roles
             </p>
             {onRefreshChannels && (
               <p className="text-center pt-2">
                 <button
                   type="button"
                   onClick={onRefreshChannels}
-                  className="text-xs text-green-600 hover:underline"
+                  className="rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
                 >
                   โหลดใหม่ (ล้าง cache)
                 </button>

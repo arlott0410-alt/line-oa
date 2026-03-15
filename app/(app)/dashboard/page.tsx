@@ -95,7 +95,15 @@ export default function DashboardPage() {
       const results = await fetchBatch(ops);
       const first = results[0];
       if (first && typeof first === "object" && "error" in first && typeof (first as { error: string }).error === "string") {
-        setChannelError((first as { error: string }).error);
+        const raw = (first as { error: string }).error;
+        let msg = raw;
+        try {
+          const parsed = JSON.parse(raw) as { error?: string; detail?: string };
+          if (parsed.error) msg = parsed.detail ? `${parsed.error}: ${parsed.detail}` : parsed.error;
+        } catch {
+          /* ใช้ raw */
+        }
+        setChannelError(msg);
         setChannels([]);
         return;
       }

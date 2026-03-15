@@ -19,7 +19,7 @@ binding = "IMAGES_BUCKET"
 bucket_name = "line-oa-images"
 
 # KV for caching channels/chats (optional - Worker works without it, just no cache)
-# Uncomment after: npx wrangler kv namespace create CACHE_KV
-# [[kv_namespaces]]
-# binding = "CACHE_KV"
-# id = "YOUR_KV_NAMESPACE_ID"
+# ถ้า deploy ผ่าน Dashboard ต้องไปเพิ่ม Binding ใน Cloudflare ด้วย (ดูด้านล่าง)
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "699aafaa26b546f6a4b18462da60f21b"
