@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendReply, uploadImage } from "@/lib/api";
 import { QuickReplies } from "@/components/QuickReplies";
@@ -135,11 +135,18 @@ export function ChatPanel({
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [viewingNames, setViewingNames] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesStartRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const offsetRef = useRef(0);
   offsetRef.current = offset;
+
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+  const firstUserMsgIndexInReversed = useMemo(
+    () => reversedMessages.findIndex((m) => m.sender_type === "user"),
+    [reversedMessages]
+  );
 
   useEffect(() => {
     canSendMessages().then(setCanReply);
@@ -183,8 +190,8 @@ export function ChatPanel({
     };
   }, [selectedChannelId, selectedUserId, currentAdminId, currentAdminDisplayName]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToLatest = () => {
+    messagesStartRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const fetchMessages = useCallback(
@@ -270,8 +277,13 @@ export function ChatPanel({
     };
   }, [selectedUserId, selectedChannelId]);
 
+  const prevNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
-    scrollToBottom();
+    const newestId = messages.length > 0 ? messages[messages.length - 1]?.id ?? null : null;
+    if (newestId !== prevNewestIdRef.current) {
+      prevNewestIdRef.current = newestId;
+      scrollToLatest();
+    }
   }, [messages]);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -484,16 +496,16 @@ export function ChatPanel({
         {loading ? (
           <div className="flex justify-center py-8 text-muted-foreground">Loading...</div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 flex flex-col">
+            <div ref={messagesStartRef} />
             {loadingMore && (
-              <div className="flex justify-center py-2 text-sm text-muted-foreground">
+              <div className="flex justify-center py-2 text-sm text-muted-foreground order-first">
                 Loading older messages...
               </div>
             )}
-            {messages.map((msg, idx) => {
+            {reversedMessages.map((msg, idx) => {
               const isCustomer = msg.sender_type === "user";
-              const lastUserMsgIndex = messages.map((m, i) => (m.sender_type === "user" ? i : -1)).filter((i) => i >= 0).pop();
-              const isLastUserMessage = isCustomer && lastUserMsgIndex === idx;
+              const isLastUserMessage = isCustomer && firstUserMsgIndexInReversed === idx;
               const viewedAt = selectedChat?.viewed_by_admin_at ? new Date(selectedChat.viewed_by_admin_at).getTime() : 0;
               const msgTime = new Date(msg.timestamp).getTime();
               const showRead = isLastUserMessage && viewedAt >= msgTime;

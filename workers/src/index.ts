@@ -790,7 +790,7 @@ app.get("/chats", async (c) => {
     url += `&assigned_admin_id=eq.${userId}`;
   }
   if (statusFilter === "my_replied_last") {
-    url += `&last_message_replied_by=eq.${userId}`;
+    url += `&last_message_replied_by=eq."${userId}"`;
   }
 
   const res = await fetch(url, {
