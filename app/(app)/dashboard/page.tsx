@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { fetchBatch, fetchChannelsFromSupabase, fetchQueue as fetchQueueApi, type ChatFilterMode } from "@/lib/api";
-import { Sidebar, type QueueItem } from "@/components/Sidebar";
+import { fetchBatch, fetchChannelsFromSupabase, type ChatFilterMode } from "@/lib/api";
+import { Sidebar } from "@/components/Sidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { Notifications } from "@/components/Notifications";
@@ -49,8 +49,6 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [chatFilter, setChatFilter] = useState<ChatFilterMode>("all");
-  const [canClaim, setCanClaim] = useState(false);
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [openChats, setOpenChats] = useState<Array<{ id: string; channelId: string; userId: string; chat: ChatUser }>>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -67,7 +65,6 @@ export default function DashboardPage() {
       }
       setSession(session as { access_token: string; user?: { id: string } });
       setCurrentUserId((session as { user?: { id: string } }).user?.id ?? null);
-      isAdminOrAbove().then(setCanClaim);
     });
   }, [router]);
 
@@ -192,29 +189,6 @@ export default function DashboardPage() {
     }
   }, [selectedChannelId, channels.length, loadAllChannelsChats, refreshChatListKey]);
 
-  const fetchQueue = async () => {
-    if (!session || !canClaim) return;
-    try {
-      const data = await fetchQueueApi();
-      setQueueItems(data);
-    } catch {
-      setQueueItems([]);
-    }
-  };
-
-  useEffect(() => {
-    if (canClaim && session) fetchQueue();
-  }, [canClaim, session]);
-
-  useEffect(() => {
-    if (!canClaim || !session) return;
-    const channel = supabase
-      .channel("dashboard-queue")
-      .on("postgres_changes", { event: "*", schema: "public", table: "line_users" }, fetchQueue)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [canClaim, session]);
-
   const addOrFocusChat = (channelId: string, userId: string, chat: ChatUser) => {
     const id = `${channelId}-${userId}`;
     setOpenChats((prev) => {
@@ -249,39 +223,23 @@ export default function DashboardPage() {
     });
   };
 
-  const handleClaim = async (lineUserId: string, channelId: string, queueItem?: QueueItem) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { error } = await supabase
-      .from("line_users")
-      .update({ assigned_admin_id: user.id, queue_status: "assigned" })
-      .eq("channel_id", channelId)
-      .eq("line_user_id", lineUserId);
-    if (error) {
-      toast.error(error.message);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentAdminDisplayName, setCurrentAdminDisplayName] = useState<string | null>(null);
+  useEffect(() => {
+    if (session) isAdminOrAbove().then(setIsAdmin);
+  }, [session]);
+  useEffect(() => {
+    if (!currentUserId) {
+      setCurrentAdminDisplayName(null);
       return;
     }
-    toast.success("รับแชทแล้ว");
-    const chat: ChatUser = queueItem
-      ? {
-          id: queueItem.id,
-          line_user_id: queueItem.line_user_id,
-          profile_name: queueItem.profile_name,
-          avatar: null,
-          last_active: queueItem.last_active,
-          channel_id: queueItem.channel_id,
-        }
-      : {
-          id: "",
-          line_user_id: lineUserId,
-          profile_name: null,
-          avatar: null,
-          last_active: new Date().toISOString(),
-          channel_id: channelId,
-        };
-    addOrFocusChat(channelId, lineUserId, chat);
-    fetchQueue();
-  };
+    supabase
+      .from("admin_profiles")
+      .select("display_name")
+      .eq("user_id", currentUserId)
+      .single()
+      .then(({ data }) => setCurrentAdminDisplayName((data as { display_name?: string } | null)?.display_name ?? null));
+  }, [currentUserId]);
 
   if (!session) {
     return (
@@ -329,11 +287,8 @@ export default function DashboardPage() {
           onRefreshChannels={() => loadChannelsAndMaybeChats({ nocache: true })}
           chatFilter={chatFilter}
           onChatFilterChange={setChatFilter}
-          canClaim={canClaim}
-          queueItems={queueItems}
-          onClaim={handleClaim}
           notifications={
-            currentUserId && canClaim ? (
+            currentUserId ? (
               <Notifications
                 userId={currentUserId}
                 onSelectChat={(channelId, lineUserId) => {
@@ -379,6 +334,7 @@ export default function DashboardPage() {
               }
               quickReplyTags={selectedChat?.tags ?? undefined}
               currentAdminId={currentUserId}
+              currentAdminDisplayName={currentAdminDisplayName}
               onMarkViewed={(chId, uId) => {
                 supabase
                   .from("line_users")
@@ -387,9 +343,9 @@ export default function DashboardPage() {
                   .eq("line_user_id", uId)
                   .then(() => setRefreshChatListKey((k) => k + 1));
               }}
-              showEscalation={canClaim}
+              showEscalation={isAdmin}
               onResolve={
-                canClaim && selectedChannelId && selectedUserId
+                isAdmin && selectedChannelId && selectedUserId
                   ? (chId, uId) => {
                       const tabId = `${chId}-${uId}`;
                       closeTab(tabId);
@@ -402,25 +358,13 @@ export default function DashboardPage() {
                   : undefined
               }
               onEscalated={
-                canClaim && selectedChannelId && selectedUserId
+                isAdmin && selectedChannelId && selectedUserId
                   ? (chId, uId) => {
                       closeTab(`${chId}-${uId}`);
                       if (selectedUserId === uId && selectedChannelId === chId) {
                         setSelectedUserId(null);
                         setSelectedChat(null);
                       }
-                    }
-                  : undefined
-              }
-              onClaim={
-                canClaim && currentUserId
-                  ? async (chId, uId) => {
-                      await handleClaim(uId, chId);
-                      setSelectedChat((c) =>
-                        c && c.line_user_id === uId && c.channel_id === chId
-                          ? { ...c, assigned_admin_id: currentUserId }
-                          : c
-                      );
                     }
                   : undefined
               }
@@ -468,6 +412,7 @@ export default function DashboardPage() {
                     }}
                     quickReplyTags={tab.chat.tags ?? undefined}
                     currentAdminId={currentUserId}
+                    currentAdminDisplayName={currentAdminDisplayName}
                     onMarkViewed={(chId, uId) => {
                       supabase
                         .from("line_users")
@@ -476,9 +421,9 @@ export default function DashboardPage() {
                         .eq("line_user_id", uId)
                         .then(() => setRefreshChatListKey((k) => k + 1));
                     }}
-                    showEscalation={canClaim}
+                    showEscalation={isAdmin}
                     onResolve={
-                      canClaim
+                      isAdmin
                         ? (chId, uId) => {
                             const tabId = `${chId}-${uId}`;
                             closeTab(tabId);
@@ -487,22 +432,8 @@ export default function DashboardPage() {
                         : undefined
                     }
                     onEscalated={
-                      canClaim && tab.channelId && tab.userId
+                      isAdmin && tab.channelId && tab.userId
                         ? (chId, uId) => closeTab(`${chId}-${uId}`)
-                        : undefined
-                    }
-                    onClaim={
-                      canClaim && currentUserId
-                        ? async (chId, uId) => {
-                            await handleClaim(uId, chId);
-                            setOpenChats((prev) =>
-                              prev.map((t) =>
-                                t.channelId === chId && t.userId === uId
-                                  ? { ...t, chat: { ...t.chat, assigned_admin_id: currentUserId } }
-                                  : t
-                              )
-                            );
-                          }
                         : undefined
                     }
                   />

@@ -747,7 +747,7 @@ app.get("/chats", async (c) => {
   const channelId = c.req.query("channel_id");
   const assignedToMe = c.req.query("assigned_to") === "me";
   const unreadOnly = c.req.query("unread_only") === "1";
-  const statusFilter = c.req.query("status") as string | undefined; // in_progress | resolved
+  const statusFilter = c.req.query("status") as string | undefined; // my_replied_last (แชทล่าสุดของเรา)
   const nocache = c.req.query("nocache") === "1";
   console.log(`GET /chats called with channel_id=${channelId ?? "null"}, assigned_to=${assignedToMe ? "me" : "all"}, unread_only=${unreadOnly}, status=${statusFilter ?? "none"}, nocache=${nocache}`);
 
@@ -785,14 +785,12 @@ app.get("/chats", async (c) => {
     }
   }
 
-  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type`;
+  let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type,last_message_replied_by`;
   if (assignedToMe) {
     url += `&assigned_admin_id=eq.${userId}`;
   }
-  if (statusFilter === "in_progress") {
-    url += "&queue_status=eq.assigned";
-  } else if (statusFilter === "resolved") {
-    url += "&queue_status=eq.resolved";
+  if (statusFilter === "my_replied_last") {
+    url += `&last_message_replied_by=eq.${userId}`;
   }
 
   const res = await fetch(url, {
@@ -818,14 +816,9 @@ app.get("/chats", async (c) => {
   console.log(`GET /chats - channel_id: ${channelId ?? "none"}, assigned_to: ${assignedToMe ? "me" : "none"}, result count: ${usersList.length}`);
 
   let filtered = usersList;
+  // แชทที่ยังไม่ได้ตอบ = แชทสุดท้ายยังเป็นของลูกค้า (ต้องตอบทุกข้อความ)
   if (unreadOnly) {
-    const now = Date.now();
-    filtered = usersList.filter((u: { last_message_sender_type?: string; last_message_timestamp?: string; viewed_by_admin_at?: string | null }) => {
-      if (u.last_message_sender_type !== "user") return false;
-      const viewedAt = (u as { viewed_by_admin_at?: string | null }).viewed_by_admin_at ? new Date((u as { viewed_by_admin_at: string }).viewed_by_admin_at).getTime() : 0;
-      const lastMsgAt = u.last_message_timestamp ? new Date(u.last_message_timestamp).getTime() : 0;
-      return lastMsgAt > viewedAt;
-    });
+    filtered = usersList.filter((u: { last_message_sender_type?: string }) => u.last_message_sender_type === "user");
   }
 
   const assignedIds = [...new Set((filtered as { assigned_admin_id?: string | null }[]).map((u) => u.assigned_admin_id).filter(Boolean))] as string[];

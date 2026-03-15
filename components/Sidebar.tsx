@@ -43,9 +43,6 @@ interface SidebarProps {
   onRefreshChannels?: () => void;
   chatFilter?: ChatFilterMode;
   onChatFilterChange?: (value: ChatFilterMode) => void;
-  canClaim?: boolean;
-  queueItems?: QueueItem[];
-  onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
   notifications?: React.ReactNode;
 }
 
@@ -74,9 +71,6 @@ export function Sidebar({
   onRefreshChannels,
   chatFilter = "all",
   onChatFilterChange,
-  canClaim = false,
-  queueItems = [],
-  onClaim,
   notifications,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
@@ -193,7 +187,7 @@ export function Sidebar({
           <div className="mt-2 space-y-1.5">
             <p className="text-xs font-semibold text-gray-700">กรองแชท</p>
             <div className="flex gap-1 flex-wrap">
-              {(["all", "unread", "in_progress", "resolved"] as const).map((mode) => (
+              {(["all", "unread", "my_replied_last"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -203,19 +197,15 @@ export function Sidebar({
                     mode === "all"
                       ? "แชททั้งหมด"
                       : mode === "unread"
-                      ? "แชทที่ลูกค้าส่งมาและยังไม่ได้เปิดดู"
-                      : mode === "in_progress"
-                      ? "แชทที่กำลังดำเนินการ (มีคนรับแล้ว)"
-                      : "แชทที่จบเคสแล้ว"
+                      ? "แชทที่ยังไม่ได้ตอบ (แชทสุดท้ายเป็นของลูกค้า)"
+                      : "แชทที่เราเป็นคนตอบล่าสุด"
                   }
                 >
                   {mode === "all"
                     ? "ทั้งหมด"
                     : mode === "unread"
-                    ? "ยังไม่อ่าน"
-                    : mode === "in_progress"
-                    ? "ดำเนินการ"
-                    : "เสร็จสิ้น"}
+                    ? "แชทที่ยังไม่ได้ตอบ"
+                    : "แชทล่าสุดของเรา"}
                 </button>
               ))}
             </div>
@@ -224,31 +214,6 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col">
-        {canClaim && queueItems.length > 0 && onClaim && (
-          <div className="border-b border-gray-200 p-3 bg-amber-50">
-            <p className="text-xs font-semibold text-amber-800 mb-1">คิวรอรับ ({queueItems.length})</p>
-            <p className="text-[10px] text-amber-700 mb-2">กด รับ เพื่อรับแชทมาทำงาน</p>
-            <ul className="space-y-1 max-h-32 overflow-y-auto">
-              {queueItems.map((q) => (
-                <li key={`${q.channel_id}-${q.line_user_id}`} className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-800">
-                      {q.profile_name || `User ${q.line_user_id.slice(-6)}`}
-                    </p>
-                    <p className="truncate text-xs text-gray-500">{q.channel_name} · {q.last_message?.content || "—"}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onClaim(q.line_user_id, q.channel_id, q)}
-                    className="shrink-0 rounded bg-[#06C755] px-2 py-1 text-xs font-medium text-white hover:bg-[#05b04a]"
-                  >
-                    รับ
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         {channelError ? (
           <div className="space-y-2 p-4">
             <p className="text-center text-sm font-medium text-amber-600">
@@ -411,11 +376,9 @@ export function Sidebar({
               <p className="text-sm font-medium text-gray-700">No conversations in this channel yet</p>
               <p className="text-xs text-gray-500">
                 {chatFilter === "unread"
-                  ? "ไม่มีแชทที่ยังไม่อ่าน"
-                  : chatFilter === "in_progress"
-                  ? "ไม่มีแชทที่กำลังดำเนินการ"
-                  : chatFilter === "resolved"
-                  ? "ไม่มีแชทที่เสร็จสิ้น"
+                  ? "ไม่มีแชทที่ยังไม่ได้ตอบ"
+                  : chatFilter === "my_replied_last"
+                  ? "ไม่มีแชทที่คุณเป็นคนตอบล่าสุด"
                   : "Send a message via Line OA to start chatting."}
               </p>
               <button

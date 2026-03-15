@@ -134,15 +134,14 @@ export async function fetchChatsFromSupabase(
   }));
 }
 
-export type ChatFilterMode = "all" | "unread" | "in_progress" | "resolved";
+export type ChatFilterMode = "all" | "unread" | "my_replied_last";
 
 export async function fetchChats(channelId: string, options?: { assignedToMe?: boolean; unreadOnly?: boolean; status?: ChatFilterMode; nocache?: boolean }) {
   const headers = await getAuthHeaders();
   let url = `${WORKER_URL}/chats?channel_id=${encodeURIComponent(channelId)}`;
   if (options?.status && options.status !== "all") {
     if (options.status === "unread") url += "&unread_only=1";
-    else if (options.status === "in_progress") url += "&status=in_progress";
-    else if (options.status === "resolved") url += "&status=resolved";
+    else if (options.status === "my_replied_last") url += "&status=my_replied_last";
   } else {
     if (options?.assignedToMe) url += "&assigned_to=me";
     if (options?.unreadOnly) url += "&unread_only=1";

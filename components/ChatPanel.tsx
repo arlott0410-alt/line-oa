@@ -86,13 +86,13 @@ interface ChatPanelProps {
   quickReplyTags?: string[];
   /** Current admin id for escalation */
   currentAdminId?: string | null;
+  /** Current admin display name (for presence "who is viewing") */
+  currentAdminDisplayName?: string | null;
   /** Call when chat is opened (mark viewed) */
   onMarkViewed?: (channelId: string, lineUserId: string) => void;
   /** Show escalation button */
   showEscalation?: boolean;
-  /** Call when user claims an unassigned chat */
-  onClaim?: (channelId: string, lineUserId: string) => void;
-  /** Call when user resolves/closes a case — removes from My Chats */
+  /** Call when user resolves/closes a case */
   onResolve?: (channelId: string, lineUserId: string) => void;
   /** Call when user transfers chat to another admin — close tab */
   onEscalated?: (channelId: string, lineUserId: string) => void;
@@ -109,9 +109,9 @@ export function ChatPanel({
   onProfileUpdated,
   quickReplyTags = [],
   currentAdminId,
+  currentAdminDisplayName,
   onMarkViewed,
   showEscalation = false,
-  onClaim,
   onResolve,
   onEscalated,
   onClose,
@@ -129,6 +129,7 @@ export function ChatPanel({
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [viewingNames, setViewingNames] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -139,6 +140,44 @@ export function ChatPanel({
   useEffect(() => {
     canSendMessages().then(setCanReply);
   }, []);
+
+  // Presence: who else is viewing this chat (to avoid replying at the same time)
+  useEffect(() => {
+    if (!selectedChannelId || !selectedUserId || !currentAdminId) {
+      setViewingNames([]);
+      return;
+    }
+    const channelName = `viewing:${selectedChannelId}:${selectedUserId}`;
+    const channel = supabase.channel(channelName);
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const names: string[] = [];
+        const seen = new Set<string>();
+        Object.values(state).forEach((presences) => {
+          (presences as Array<{ user_id?: string; display_name?: string }>).forEach((p) => {
+            if (p.user_id && p.user_id !== currentAdminId && !seen.has(p.user_id)) {
+              seen.add(p.user_id);
+              names.push(p.display_name || "ผู้ใช้");
+            }
+          });
+        });
+        setViewingNames(names);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            user_id: currentAdminId,
+            display_name: currentAdminDisplayName || "ผู้ใช้",
+          });
+        }
+      });
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+      setViewingNames([]);
+    };
+  }, [selectedChannelId, selectedUserId, currentAdminId, currentAdminDisplayName]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -316,15 +355,6 @@ export function ChatPanel({
 
       <div className="border-b border-gray-200 bg-white px-4 py-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {onClaim && showEscalation && currentAdminId && selectedChannelId && selectedUserId && selectedChat?.assigned_admin_id !== currentAdminId && (
-            <button
-              type="button"
-              onClick={() => onClaim(selectedChannelId, selectedUserId)}
-              className="shrink-0 rounded bg-[#06C755] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#05b04a]"
-            >
-              รับแชท
-            </button>
-          )}
           {selectedChannelName && (
             <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
               {selectedChannelName}
@@ -344,6 +374,11 @@ export function ChatPanel({
             {selectedChat?.assigned_admin_id && (
               <p className="text-xs text-muted-foreground truncate" title="คนรับแชท">
                 รับโดย: {selectedChat.assigned_admin_display_name || "—"}
+              </p>
+            )}
+            {viewingNames.length > 0 && (
+              <p className="text-[10px] text-emerald-600 truncate" title="กำลังดูหน้านี้อยู่">
+                กำลังดูอยู่: {viewingNames.join(", ")}
               </p>
             )}
           </div>
@@ -440,11 +475,6 @@ export function ChatPanel({
         </DialogContent>
       </Dialog>
 
-      {onClaim && showEscalation && currentAdminId && selectedChat?.assigned_admin_id !== currentAdminId && (
-        <div className="shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100 text-sm text-amber-800 flex items-center justify-between gap-2">
-          <span>แชทนี้ยังไม่มีคุณรับ — กดปุ่ม รับแชท ด้านบนเพื่อรับมาทำงาน</span>
-        </div>
-      )}
 
       <div
         ref={scrollRef}
