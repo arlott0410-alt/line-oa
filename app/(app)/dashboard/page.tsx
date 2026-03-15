@@ -59,6 +59,7 @@ export default function DashboardPage() {
   const [chatsByChannel, setChatsByChannel] = useState<Record<string, ChatUser[]>>({});
   const [allChannelsLoading, setAllChannelsLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(false);
+  const [refreshChatListKey, setRefreshChatListKey] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -337,6 +338,7 @@ export default function DashboardPage() {
       />
       <div className="flex h-full overflow-hidden">
         <Sidebar
+          refreshChatListKey={refreshChatListKey}
           selectedUserId={selectedUserId}
           selectedChannelId={selectedChannelId}
           channels={channels}
@@ -417,13 +419,12 @@ export default function DashboardPage() {
               quickReplyTags={selectedChat?.tags ?? undefined}
               currentAdminId={currentUserId}
               onMarkViewed={(chId, uId) => {
-                if (!currentUserId) return;
                 supabase
                   .from("line_users")
                   .update({ viewed_by_admin_at: new Date().toISOString() })
                   .eq("channel_id", chId)
                   .eq("line_user_id", uId)
-                  .eq("assigned_admin_id", currentUserId);
+                  .then(() => setRefreshChatListKey((k) => k + 1));
               }}
               showEscalation={canClaim}
               onResolve={
@@ -528,13 +529,12 @@ export default function DashboardPage() {
                     quickReplyTags={tab.chat.tags ?? undefined}
                     currentAdminId={currentUserId}
                     onMarkViewed={(chId, uId) => {
-                      if (!currentUserId) return;
                       supabase
                         .from("line_users")
                         .update({ viewed_by_admin_at: new Date().toISOString() })
                         .eq("channel_id", chId)
                         .eq("line_user_id", uId)
-                        .eq("assigned_admin_id", currentUserId);
+                        .then(() => setRefreshChatListKey((k) => k + 1));
                     }}
                     showEscalation={canClaim}
                     onResolve={

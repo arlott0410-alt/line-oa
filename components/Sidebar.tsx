@@ -23,6 +23,8 @@ export interface QueueItem {
 const ALL_CHANNELS_ID = "__all__";
 
 interface SidebarProps {
+  /** เปลี่ยนค่าเมื่อต้องการให้รายการแชทโหลดใหม่ (เช่น หลัง mark อ่านแล้ว) */
+  refreshChatListKey?: number;
   selectedUserId: string | null;
   selectedChannelId: string | null;
   channels: Channel[];
@@ -50,7 +52,16 @@ interface SidebarProps {
   notifications?: React.ReactNode;
 }
 
+/** สีประจำ channel จาก id (คงที่ต่อ channel) */
+function getChannelColor(channelId: string): string {
+  let h = 0;
+  for (let i = 0; i < channelId.length; i++) h = (h * 31 + channelId.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue}, 52%, 42%)`;
+}
+
 export function Sidebar({
+  refreshChatListKey = 0,
   selectedUserId,
   selectedChannelId,
   channels,
@@ -115,7 +126,7 @@ export function Sidebar({
     }
     debouncedLoadChats();
     return () => debouncedLoadChats.cancel();
-  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats]);
+  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats, refreshChatListKey]);
 
   useEffect(() => {
     if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) return;
@@ -352,7 +363,10 @@ export function Sidebar({
                           <span className="text-xs">No conversations yet in this channel.</span>
                         </li>
                       ) : (
-                        list.map((chat) => (
+                        list.map((chat) => {
+                          const channelColor = getChannelColor(ch.id);
+                          const isSelected = selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id;
+                          return (
                           <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                             <button
                               onClick={() => {
@@ -360,32 +374,45 @@ export function Sidebar({
                                 onSelectChat?.(chat);
                               }}
                               className={`flex w-full items-center gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all duration-200 ${
-                                selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id
+                                isSelected
                                   ? "border-[#06C755] bg-[#06C755] text-white shadow-md"
                                   : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
                               }`}
+                              style={!isSelected ? { borderLeftWidth: "4px", borderLeftColor: channelColor } : undefined}
                             >
                               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
-                                selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                                isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
                               }`}>
                                 {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
                               </div>
                               <div className="min-w-0 flex-1">
+                                <span
+                                  className="mb-0.5 inline-block truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={
+                                    isSelected
+                                      ? { backgroundColor: "rgba(255,255,255,0.25)", color: "white" }
+                                      : { backgroundColor: channelColor.replace(/\)$/, ", 0.15)").replace(/^hsl\(/, "hsla("), color: channelColor }
+                                  }
+                                  title={ch.name}
+                                >
+                                  {ch.name}
+                                </span>
                                 <p className="truncate font-medium">
                                   {chat.profile_name || `User ${chat.line_user_id.slice(-6)}`}
                                 </p>
-                                <p className={`truncate text-xs ${selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "text-white/80" : "text-gray-500"}`}>
+                                <p className={`truncate text-xs ${isSelected ? "text-white/80" : "text-gray-500"}`}>
                                   {chat.last_message?.content || "No messages"}
                                 </p>
                                 {chat.assigned_admin_display_name && (
-                                  <p className={`truncate text-[10px] mt-0.5 ${selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id ? "text-white/70" : "text-gray-400"}`}>
+                                  <p className={`truncate text-[10px] mt-0.5 ${isSelected ? "text-white/70" : "text-gray-400"}`}>
                                     รับโดย: {chat.assigned_admin_display_name}
                                   </p>
                                 )}
                               </div>
                             </button>
                           </li>
-                        ))
+                          );
+                        })
                       )}
                     </ul>
                   </div>
@@ -446,7 +473,11 @@ export function Sidebar({
               </p>
             </div>
             <ul className="space-y-2 p-3">
-            {chats.map((chat) => (
+            {chats.map((chat) => {
+              const chId = chat.channel_id ?? selectedChannelId;
+              const chName = chId ? channels.find((c) => c.id === chId)?.name : null;
+              const channelColor = chId ? getChannelColor(chId) : undefined;
+              return (
               <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
                   onClick={() => {
@@ -458,6 +489,7 @@ export function Sidebar({
                       ? "border-[#06C755] bg-[#06C755] text-white shadow-md"
                       : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
                   }`}
+                  style={channelColor && selectedUserId !== chat.line_user_id ? { borderLeftWidth: "4px", borderLeftColor: channelColor } : undefined}
                 >
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
                     selectedUserId === chat.line_user_id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
@@ -465,6 +497,19 @@ export function Sidebar({
                     {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
                   </div>
                   <div className="min-w-0 flex-1">
+                    {chName && (
+                      <span
+                        className="mb-0.5 inline-block truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        style={
+                          selectedUserId === chat.line_user_id
+                            ? { backgroundColor: "rgba(255,255,255,0.25)", color: "white" }
+                            : { backgroundColor: channelColor ? channelColor.replace(/\)$/, ", 0.15)").replace(/^hsl\(/, "hsla(") : undefined, color: channelColor }
+                        }
+                        title={chName}
+                      >
+                        {chName}
+                      </span>
+                    )}
                     <p className="truncate font-medium">
                       {chat.profile_name || `User ${chat.line_user_id.slice(-6)}`}
                     </p>
@@ -479,7 +524,8 @@ export function Sidebar({
                   </div>
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
           </>
         )}
