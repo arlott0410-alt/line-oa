@@ -98,6 +98,8 @@ interface ChatPanelProps {
   onEscalated?: (channelId: string, lineUserId: string) => void;
   /** ปิดแชทนี้ (ปุ่ม X ด้านขวาบน) */
   onClose?: () => void;
+  /** เรียกหลังส่งข้อความสำเร็จ (ให้ refresh รายการแชทใน Sidebar) */
+  onMessageSent?: () => void;
 }
 
 export function ChatPanel({
@@ -115,6 +117,7 @@ export function ChatPanel({
   onResolve,
   onEscalated,
   onClose,
+  onMessageSent,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -287,6 +290,7 @@ export function ChatPanel({
       }
       await sendReply(selectedChannelId, selectedUserId, content || "", imageUrl);
       await fetchMessages(true);
+      onMessageSent?.();
     } catch (err) {
       setError((err as Error).message);
       setInput(content);

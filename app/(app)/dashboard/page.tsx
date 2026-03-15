@@ -329,6 +329,7 @@ export default function DashboardPage() {
                 setSelectedUserId(null);
                 setSelectedChat(null);
               }}
+              onMessageSent={() => setRefreshChatListKey((k) => k + 1)}
               onProfileUpdated={(name) =>
                 setSelectedChat((c) => (c ? { ...c, profile_name: name } : null))
               }
@@ -400,6 +401,7 @@ export default function DashboardPage() {
                     selectedChat={tab.chat}
                     token={session.access_token}
                     onClose={() => closeTab(tab.id)}
+                    onMessageSent={() => setRefreshChatListKey((k) => k + 1)}
                     onProfileUpdated={(name) => {
                       setOpenChats((prev) =>
                         prev.map((t) =>
