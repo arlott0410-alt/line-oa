@@ -93,6 +93,8 @@ interface ChatPanelProps {
   onResolve?: (channelId: string, lineUserId: string) => void;
   /** Call when user transfers chat to another admin — close tab */
   onEscalated?: (channelId: string, lineUserId: string) => void;
+  /** ปิดแชทนี้ (ปุ่ม X ด้านขวาบน) */
+  onClose?: () => void;
 }
 
 export function ChatPanel({
@@ -109,6 +111,7 @@ export function ChatPanel({
   onClaim,
   onResolve,
   onEscalated,
+  onClose,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -384,6 +387,16 @@ export function ChatPanel({
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
         </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            title="ปิดแชท"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        )}
       </div>
       <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
         <DialogContent className="sm:max-w-md">

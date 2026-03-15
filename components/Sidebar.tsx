@@ -90,7 +90,7 @@ export function Sidebar({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadChats = useCallback(async () => {
+  const loadChats = useCallback(async (opts?: { nocache?: boolean }) => {
     if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) {
       setChats([]);
       setLoading(false);
@@ -102,6 +102,7 @@ export function Sidebar({
       const data = await fetchChats(selectedChannelId, {
         assignedToMe: showMyChatsOnly || showUnreadOnly,
         unreadOnly: showUnreadOnly,
+        nocache: opts?.nocache,
       });
       setChats(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -124,9 +125,13 @@ export function Sidebar({
       setLoading(false);
       return;
     }
-    debouncedLoadChats();
+    if (refreshChatListKey > 0) {
+      loadChats({ nocache: true });
+    } else {
+      debouncedLoadChats();
+    }
     return () => debouncedLoadChats.cancel();
-  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats, refreshChatListKey]);
+  }, [selectedChannelId, token, showMyChatsOnly, showUnreadOnly, debouncedLoadChats, refreshChatListKey, loadChats]);
 
   useEffect(() => {
     if (!selectedChannelId || selectedChannelId === ALL_CHANNELS_ID) return;

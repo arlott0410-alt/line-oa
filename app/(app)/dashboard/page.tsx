@@ -10,8 +10,7 @@ import { OnboardingModal } from "@/components/OnboardingModal";
 import { Notifications } from "@/components/Notifications";
 import { isAdminOrAbove } from "@/lib/auth";
 import { toast } from "sonner";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { X } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 const STORAGE_KEY_LAST_CHANNEL = "line-oa-last-channel";
 const ALL_CHANNELS_ID = "__all__";
@@ -173,7 +172,7 @@ export default function DashboardPage() {
     }
   }, [channels, selectedChannelId]);
 
-  const loadAllChannelsChats = useCallback(async () => {
+  const loadAllChannelsChats = useCallback(async (opts?: { nocache?: boolean }) => {
     if (!session || channels.length === 0) return;
     setAllChannelsLoading(true);
     try {
@@ -182,6 +181,7 @@ export default function DashboardPage() {
         channel_id: ch.id,
         ...(showMyChatsOnly ? { assigned_to: "me" as const } : {}),
         ...(showUnreadOnly ? { unread_only: "1" as const } : {}),
+        ...(opts?.nocache ? { nocache: true as const } : {}),
       }));
       const results = await fetchBatch(operations);
       const byChannel: Record<string, ChatUser[]> = {};
@@ -199,11 +199,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (selectedChannelId === ALL_CHANNELS_ID && channels.length > 0) {
-      loadAllChannelsChats();
+      loadAllChannelsChats(refreshChatListKey > 0 ? { nocache: true } : undefined);
     } else {
       setChatsByChannel({});
     }
-  }, [selectedChannelId, channels.length, loadAllChannelsChats]);
+  }, [selectedChannelId, channels.length, loadAllChannelsChats, refreshChatListKey]);
 
   const fetchQueue = async () => {
     if (!session || !canClaim) return;
@@ -413,6 +413,10 @@ export default function DashboardPage() {
               }
               selectedChat={selectedChat}
               token={session.access_token}
+              onClose={() => {
+                setSelectedUserId(null);
+                setSelectedChat(null);
+              }}
               onProfileUpdated={(name) =>
                 setSelectedChat((c) => (c ? { ...c, profile_name: name } : null))
               }
@@ -436,6 +440,7 @@ export default function DashboardPage() {
                         setSelectedUserId(null);
                         setSelectedChat(null);
                       }
+                      setRefreshChatListKey((k) => k + 1);
                     }
                   : undefined
               }
@@ -477,29 +482,6 @@ export default function DashboardPage() {
               }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="shrink-0 w-full justify-start rounded-none border-b bg-transparent p-0">
-                {openChats.map((tab) => (
-                  <TabsTrigger
-                    key={tab.id}
-                    value={tab.id}
-                    className="rounded-none border-b-2 border-transparent data-active:border-[#06C755] data-active:bg-transparent"
-                  >
-                    <span className="truncate max-w-24">
-                      {tab.chat.profile_name || `User ${tab.userId.slice(-6)}`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(tab.id);
-                      }}
-                      className="ml-1 p-0.5 rounded hover:bg-gray-200"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
               {openChats.map((tab) => (
                 <TabsContent
                   key={tab.id}
@@ -516,6 +498,7 @@ export default function DashboardPage() {
                     }
                     selectedChat={tab.chat}
                     token={session.access_token}
+                    onClose={() => closeTab(tab.id)}
                     onProfileUpdated={(name) => {
                       setOpenChats((prev) =>
                         prev.map((t) =>
@@ -542,6 +525,7 @@ export default function DashboardPage() {
                         ? (chId, uId) => {
                             const tabId = `${chId}-${uId}`;
                             closeTab(tabId);
+                            setRefreshChatListKey((k) => k + 1);
                           }
                         : undefined
                     }

@@ -747,7 +747,8 @@ app.get("/chats", async (c) => {
   const channelId = c.req.query("channel_id");
   const assignedToMe = c.req.query("assigned_to") === "me";
   const unreadOnly = c.req.query("unread_only") === "1";
-  console.log(`GET /chats called with channel_id=${channelId ?? "null"}, assigned_to=${assignedToMe ? "me" : "all"}, unread_only=${unreadOnly}`);
+  const nocache = c.req.query("nocache") === "1";
+  console.log(`GET /chats called with channel_id=${channelId ?? "null"}, assigned_to=${assignedToMe ? "me" : "all"}, unread_only=${unreadOnly}, nocache=${nocache}`);
 
   const supabaseUrl = (c.env.SUPABASE_URL ?? c.env.SUPABASE_URI) as string;
   const supabaseAnonKey = c.env.SUPABASE_ANON_KEY as string;
@@ -770,7 +771,7 @@ app.get("/chats", async (c) => {
   if (userData.error || !userId) return c.json({ error: "Invalid token", chats: [] }, 401);
 
   const cacheKey = `chats:${channelId}:${assignedToMe ? (unreadOnly ? `${userId}:unread` : userId) : "all"}`;
-  if (kv) {
+  if (kv && !nocache) {
     const cached = await kv.get(cacheKey);
     if (cached) {
       try {
@@ -784,10 +785,8 @@ app.get("/chats", async (c) => {
   }
 
   let url = `${supabaseUrl}/rest/v1/line_users?channel_id=eq.${channelId}&order=last_active.desc&select=id,line_user_id,profile_name,avatar,last_active,channel_id,assigned_admin_id,tags,viewed_by_admin_at,last_message_content,last_message_timestamp,last_message_sender_type`;
-  // DEBUG: ignore assigned_to=me so all chats in channel are returned (avoids empty list when no assignment)
-  if (assignedToMe || unreadOnly) {
-    console.log(`GET /chats: would filter assigned_to=me (userId=${userId}), ignoring for debugging – returning all channel chats`);
-    // url += `&assigned_admin_id=eq.${userId}`;  // re-enable when assignment filter is needed
+  if (assignedToMe) {
+    url += `&assigned_admin_id=eq.${userId}`;
   }
 
   const res = await fetch(url, {
@@ -858,7 +857,7 @@ app.get("/chats", async (c) => {
         : null,
   }));
 
-  if (kv) {
+  if (kv && !nocache) {
     await kv.put(cacheKey, JSON.stringify(usersWithLastMessage), { expirationTtl: CHATS_CACHE_TTL });
   }
   console.log(`GET /chats - channel_id: ${channelId}, assigned_to: ${assignedToMe ? "me" : "none"}, result count: ${usersWithLastMessage.length}`);
@@ -899,6 +898,7 @@ app.post("/batch", async (c) => {
       let url = `${baseUrl}/chats?channel_id=${encodeURIComponent(op.channel_id)}`;
       if (op.assigned_to) url += `&assigned_to=${encodeURIComponent(op.assigned_to)}`;
       if (op.unread_only === "1") url += "&unread_only=1";
+      if (op.nocache) url += "&nocache=1";
       const res = await fetch(url, { headers });
       if (!res.ok) return { error: await res.text() };
       return res.json();
