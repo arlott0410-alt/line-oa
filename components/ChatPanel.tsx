@@ -365,7 +365,7 @@ export function ChatPanel({
   }
 
   return (
-    <main className="flex flex-1 flex-col min-h-0 bg-white">
+    <main className="flex flex-1 flex-col min-h-0 overflow-hidden bg-white h-full">
       <Dialog open={!!imageModalUrl} onOpenChange={() => setImageModalUrl(null)}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden">
           {imageModalUrl && (
@@ -608,78 +608,91 @@ export function ChatPanel({
         </div>
       )}
 
-      <form
-        onSubmit={handleSend}
-        className="shrink-0 flex flex-col gap-2 border-t border-border bg-gray-50 p-4"
+      <section
+        className="flex-shrink-0 min-h-[72px] border-t border-gray-200 bg-white"
+        aria-label="ช่องส่งข้อความ"
       >
-        {pendingImage && pendingImagePreview && (
-          <div className="flex items-center gap-2">
-            <img
-              src={pendingImagePreview}
-              alt="Preview"
-              className="h-16 w-16 object-cover rounded-lg border"
-            />
-            <span className="text-sm text-muted-foreground truncate flex-1">{pendingImage.name}</span>
-            <button
-              type="button"
-              onClick={() => setPendingImage(null)}
-              className="text-red-500 hover:text-red-700 text-sm"
+        <form
+          onSubmit={handleSend}
+          className="flex flex-col h-full min-h-[72px] p-3"
+        >
+          {pendingImage && pendingImagePreview && (
+            <div className="flex items-center gap-2 mb-2">
+              <img
+                src={pendingImagePreview}
+                alt="Preview"
+                className="h-14 w-14 object-cover rounded-lg border border-gray-200"
+              />
+              <span className="text-sm text-gray-500 truncate flex-1">{pendingImage.name}</span>
+              <button
+                type="button"
+                onClick={() => setPendingImage(null)}
+                className="text-red-500 hover:text-red-700 text-sm font-medium"
+              >
+                ลบ
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-2 flex-1 min-h-0">
+            <div className="flex flex-col flex-1 min-w-0 min-h-[44px]">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Enter: ส่ง, Shift + Enter: ขึ้นบรรทัดใหม่"
+                rows={2}
+                className="w-full min-h-[44px] max-h-32 resize-none rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-[#06C755]/25 focus:border-[#06C755] disabled:opacity-50 placeholder:text-gray-400 border-gray-300"
+                disabled={sending || !canReply}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend(e as unknown as React.FormEvent);
+                  }
+                }}
+              />
+              <div className="flex items-center gap-1 mt-1.5">
+                <QuickReplies
+                  onSelect={(content) => setInput((prev) => prev ? `${prev}\n${content}` : content)}
+                  filterTags={quickReplyTags}
+                  disabled={sending || !canReply}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  onChange={handleImageSelect}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || !canReply}
+                  className="shrink-0 p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                  title="แนบรูปภาพ"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 cursor-default"
+                  title="กล้อง"
+                  disabled
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+            <Button
+              type="submit"
+              disabled={sending || (!input.trim() && !pendingImage) || !canReply}
+              className="shrink-0 rounded-full h-10 w-10 p-0 bg-[#06C755] hover:bg-[#05b04a] self-end"
+              title="ส่ง"
             >
-              ลบ
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </Button>
           </div>
-        )}
-        <div className="flex items-end gap-2">
-          <QuickReplies
-            onSelect={(content) => setInput((prev) => prev ? `${prev}\n${content}` : content)}
-            filterTags={quickReplyTags}
-            disabled={sending || !canReply}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending || !canReply}
-            className="shrink-0 p-2.5 rounded-full border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-            title="ส่งรูป"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-              <circle cx="9" cy="9" r="2"/>
-              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-            </svg>
-          </button>
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="พิมพ์ข้อความหรือส่งรูป..."
-            rows={2}
-            className="min-h-[56px] max-h-40 flex-1 resize-none rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-base outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] disabled:opacity-50 placeholder:text-gray-400"
-            disabled={sending || !canReply}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e as unknown as React.FormEvent);
-              }
-            }}
-          />
-          <Button
-            type="submit"
-            disabled={sending || (!input.trim() && !pendingImage) || !canReply}
-            className="shrink-0 rounded-full h-11 w-11 p-0 bg-[#06C755] hover:bg-[#05b04a]"
-            title="ส่ง"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-          </Button>
-        </div>
-      </form>
+        </form>
+      </section>
     </main>
   );
 }
