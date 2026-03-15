@@ -1063,7 +1063,7 @@ app.get("/messages/:userId", async (c) => {
 
   if (authError) return c.json({ error: "Invalid token" }, 401);
 
-  const params = `channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type&limit=${limit}&offset=${offset}`;
+  const params = `channel_id=eq.${channelId}&line_user_id=eq.${encodeURIComponent(userId)}&order=timestamp.asc&select=id,line_user_id,sender_type,content,timestamp,channel_id,image_original_url,image_preview_url,mime_type,replied_by&limit=${limit}&offset=${offset}`;
   const res = await fetch(
     `${supabaseUrl}/rest/v1/messages?${params}`,
     {
@@ -1075,8 +1075,31 @@ app.get("/messages/:userId", async (c) => {
   );
 
   if (!res.ok) return c.json({ error: "Failed to fetch messages" }, 500);
-  const messages = await res.json();
-  return c.json(messages);
+  const messages = (await res.json()) as Array<{ replied_by?: string | null } & Record<string, unknown>>;
+  const repliedByIds = [...new Set(messages.map((m) => m.replied_by).filter(Boolean))] as string[];
+  let replyProfileMap = new Map<string, string>();
+  if (repliedByIds.length > 0) {
+    const idsFilter = repliedByIds.map((id) => `"${id}"`).join(",");
+    const profilesRes = await fetch(
+      `${supabaseUrl}/rest/v1/admin_profiles?user_id=in.(${idsFilter})&select=user_id,display_name`,
+      {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (profilesRes.ok) {
+      const profiles = (await profilesRes.json()) as { user_id: string; display_name: string | null }[];
+      replyProfileMap = new Map(profiles.map((p) => [p.user_id, p.display_name || ""]));
+    }
+  }
+  const withDisplayNames = messages.map((m) => {
+    const { replied_by: rb, ...rest } = m;
+    const replied_by_display_name = rb ? replyProfileMap.get(rb) || null : null;
+    return { ...rest, replied_by: rb, replied_by_display_name };
+  });
+  return c.json(withDisplayNames);
   } catch (e) {
     console.error(e);
     return c.json({ error: (e as Error).message || "Internal error" }, 500);
@@ -1147,11 +1170,12 @@ app.post("/reply", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  const { error: authError } = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { Authorization: `Bearer ${token}` },
-  }).then((r) => r.json());
+  }).then((r) => r.json()) as { id?: string; error?: string };
 
-  if (authError) return c.json({ error: "Invalid token" }, 401);
+  if (authRes.error) return c.json({ error: "Invalid token" }, 401);
+  const replyByUserId = authRes.id ?? null;
 
   let body: { channel_id: string; line_user_id: string; content?: string; image_url?: string };
   try {
@@ -1224,7 +1248,7 @@ app.post("/reply", async (c) => {
     }),
   }).catch(() => {});
 
-  // Insert admin message
+  // Insert admin message (with replied_by for display name)
   const msgContent = content || (image_url ? "[Image]" : "");
   const messageBody: Record<string, unknown> = {
     channel_id,
@@ -1232,6 +1256,7 @@ app.post("/reply", async (c) => {
     sender_type: "admin",
     content: msgContent,
   };
+  if (replyByUserId) messageBody.replied_by = replyByUserId;
   if (image_url) {
     messageBody.image_original_url = image_url;
     messageBody.image_preview_url = image_url;

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { fetchChats } from "@/lib/api";
 import debounce from "lodash/debounce";
-import { CircleDot, Clock, CircleOff, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { ChatFilterMode } from "@/lib/api";
@@ -46,8 +46,6 @@ interface SidebarProps {
   canClaim?: boolean;
   queueItems?: QueueItem[];
   onClaim?: (lineUserId: string, channelId: string, queueItem?: QueueItem) => void;
-  adminStatus?: "available" | "busy" | "offline";
-  onStatusChange?: (status: "available" | "busy" | "offline") => void;
   notifications?: React.ReactNode;
 }
 
@@ -79,8 +77,6 @@ export function Sidebar({
   canClaim = false,
   queueItems = [],
   onClaim,
-  adminStatus = "offline",
-  onStatusChange,
   notifications,
 }: SidebarProps) {
   const [chats, setChats] = useState<ChatUser[]>([]);
@@ -172,38 +168,6 @@ export function Sidebar({
       <div className="border-b border-gray-200 p-3 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
         {notifications}
-        {canClaim && onStatusChange && (
-          <div className="flex items-center gap-1 shrink-0">
-            {(["available", "busy", "offline"] as const).map((s) => {
-              const labels = { available: "ว่าง", busy: "ไม่ว่าง", offline: "ออฟไลน์" };
-              const isActive = adminStatus === s;
-              const styles = isActive
-                ? s === "available"
-                  ? "bg-green-600 text-white"
-                  : s === "busy"
-                  ? "bg-amber-500 text-white"
-                  : "bg-gray-500 text-white"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200";
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => onStatusChange(s)}
-                  title={labels[s]}
-                  className={`rounded-full p-1.5 transition ${styles}`}
-                >
-                  {s === "available" ? (
-                    <CircleDot className="h-4 w-4" />
-                  ) : s === "busy" ? (
-                    <Clock className="h-4 w-4" />
-                  ) : (
-                    <CircleOff className="h-4 w-4" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-gray-900 truncate">Chats</h2>
           {channels.length > 1 && (
@@ -357,6 +321,7 @@ export function Sidebar({
                         list.map((chat) => {
                           const channelColor = getChannelColor(ch.id);
                           const isSelected = selectedChat?.channel_id === ch.id && selectedChat?.line_user_id === chat.line_user_id;
+                          const isUnread = chat.last_message?.sender_type === "user" && (!chat.viewed_by_admin_at || new Date(chat.viewed_by_admin_at) < new Date(chat.last_message?.timestamp ?? 0));
                           return (
                           <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                             <button
@@ -371,10 +336,15 @@ export function Sidebar({
                               }`}
                               style={!isSelected ? { borderLeftWidth: "4px", borderLeftColor: channelColor } : undefined}
                             >
-                              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
-                                isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
-                              }`}>
-                                {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
+                              <div className="relative shrink-0">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium ${
+                                  isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                                }`}>
+                                  {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
+                                </div>
+                                {isUnread && (
+                                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#06C755] border-2 border-white" aria-hidden />
+                                )}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <span
@@ -470,6 +440,7 @@ export function Sidebar({
               const chId = chat.channel_id ?? selectedChannelId;
               const chName = chId ? channels.find((c) => c.id === chId)?.name : null;
               const channelColor = chId ? getChannelColor(chId) : undefined;
+              const isUnread = chat.last_message?.sender_type === "user" && (!chat.viewed_by_admin_at || new Date(chat.viewed_by_admin_at) < new Date(chat.last_message?.timestamp ?? 0));
               return (
               <li key={`${chat.channel_id}-${chat.line_user_id}`}>
                 <button
@@ -484,10 +455,15 @@ export function Sidebar({
                   }`}
                   style={channelColor && selectedUserId !== chat.line_user_id ? { borderLeftWidth: "4px", borderLeftColor: channelColor } : undefined}
                 >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
-                    selectedUserId === chat.line_user_id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
-                  }`}>
-                    {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
+                  <div className="relative shrink-0">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium ${
+                      selectedUserId === chat.line_user_id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                    }`}>
+                      {chat.profile_name?.[0]?.toUpperCase() || chat.line_user_id.slice(-2)}
+                    </div>
+                    {isUnread && (
+                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#06C755] border-2 border-white" aria-hidden />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     {chName && (

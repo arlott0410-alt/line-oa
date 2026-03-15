@@ -61,6 +61,7 @@ interface Message {
   image_original_url?: string | null;
   image_preview_url?: string | null;
   mime_type?: string | null;
+  replied_by_display_name?: string | null;
 }
 
 interface ChatUserInfo {
@@ -70,6 +71,8 @@ interface ChatUserInfo {
   channel_id?: string;
   assigned_admin_id?: string | null;
   assigned_admin_display_name?: string | null;
+  viewed_by_admin_at?: string | null;
+  last_message?: { content: string; timestamp: string; sender_type: string } | null;
 }
 
 interface ChatPanelProps {
@@ -128,7 +131,7 @@ export function ChatPanel({
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const offsetRef = useRef(0);
   offsetRef.current = offset;
@@ -298,7 +301,7 @@ export function ChatPanel({
   }
 
   return (
-    <main className="flex flex-1 flex-col bg-white">
+    <main className="flex flex-1 flex-col min-h-0 bg-white">
       <Dialog open={!!imageModalUrl} onOpenChange={() => setImageModalUrl(null)}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden">
           {imageModalUrl && (
@@ -446,7 +449,7 @@ export function ChatPanel({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 min-h-0 overflow-y-auto p-4"
       >
         {loading ? (
           <div className="flex justify-center py-8 text-muted-foreground">Loading...</div>
@@ -457,8 +460,13 @@ export function ChatPanel({
                 Loading older messages...
               </div>
             )}
-            {messages.map((msg) => {
+            {messages.map((msg, idx) => {
               const isCustomer = msg.sender_type === "user";
+              const lastUserMsgIndex = messages.map((m, i) => (m.sender_type === "user" ? i : -1)).filter((i) => i >= 0).pop();
+              const isLastUserMessage = isCustomer && lastUserMsgIndex === idx;
+              const viewedAt = selectedChat?.viewed_by_admin_at ? new Date(selectedChat.viewed_by_admin_at).getTime() : 0;
+              const msgTime = new Date(msg.timestamp).getTime();
+              const showRead = isLastUserMessage && viewedAt >= msgTime;
               return (
                 <div
                   key={msg.id}
@@ -494,16 +502,26 @@ export function ChatPanel({
                       ) : msg.content === "[Image]" && !msg.image_original_url && !msg.image_preview_url ? (
                         <p className="text-sm opacity-80">[รูปภาพ – กำลังโหลด]</p>
                       ) : null}
-                      <p
-                        className={`mt-1 text-xs ${
-                          isCustomer ? "text-muted-foreground" : "text-green-100/80"
-                        }`}
-                      >
-                        {new Date(msg.timestamp).toLocaleTimeString("th-TH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0">
+                        <span
+                          className={`text-xs ${
+                            isCustomer ? "text-muted-foreground" : "text-green-100/80"
+                          }`}
+                        >
+                          {new Date(msg.timestamp).toLocaleTimeString("th-TH", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {!isCustomer && msg.replied_by_display_name && (
+                          <span className="text-[10px] text-green-100/90" title="ผู้ตอบ">
+                            {msg.replied_by_display_name}
+                          </span>
+                        )}
+                        {showRead && (
+                          <span className="text-[10px] text-muted-foreground">อ่านแล้ว</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -515,20 +533,20 @@ export function ChatPanel({
       </div>
 
       {error && (
-        <div className="border-t border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <div className="shrink-0 border-t border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
         </div>
       )}
 
       {!canReply && (
-        <div className="border-t border-gray-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
+        <div className="shrink-0 border-t border-gray-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
           Viewer role: You cannot send messages.
         </div>
       )}
 
       <form
         onSubmit={handleSend}
-        className="flex flex-col gap-2 border-t border-border p-4"
+        className="shrink-0 flex flex-col gap-2 border-t border-border bg-gray-50 p-3 sm:p-4"
       >
         {pendingImage && pendingImagePreview && (
           <div className="flex items-center gap-2">
@@ -547,7 +565,7 @@ export function ChatPanel({
             </button>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
           <QuickReplies
             onSelect={(content) => setInput((prev) => prev ? `${prev}\n${content}` : content)}
             filterTags={quickReplyTags}
@@ -564,7 +582,7 @@ export function ChatPanel({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending || !canReply}
-            className="shrink-0 p-2 rounded-lg border border-input hover:bg-muted disabled:opacity-50"
+            className="shrink-0 p-2.5 rounded-full border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
             title="ส่งรูป"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -573,21 +591,28 @@ export function ChatPanel({
               <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
             </svg>
           </button>
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="พิมพ์ข้อความหรือส่งรูป..."
-            className="flex-1 rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            rows={1}
+            className="min-h-[44px] max-h-32 flex-1 resize-none rounded-2xl border border-gray-300 bg-white px-4 py-3 text-base outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] disabled:opacity-50 placeholder:text-gray-400"
             disabled={sending || !canReply}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e as unknown as React.FormEvent);
+              }
+            }}
           />
           <Button
             type="submit"
             disabled={sending || (!input.trim() && !pendingImage) || !canReply}
-            className="bg-[#06C755] hover:bg-[#05b04a] shrink-0"
+            className="shrink-0 rounded-full h-11 w-11 p-0 bg-[#06C755] hover:bg-[#05b04a]"
+            title="ส่ง"
           >
-            ส่ง
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </Button>
         </div>
       </form>

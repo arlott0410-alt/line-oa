@@ -25,6 +25,7 @@ export interface ChatUser {
   tags?: string[] | null;
   assigned_admin_id?: string | null;
   assigned_admin_display_name?: string | null;
+  viewed_by_admin_at?: string | null;
   last_message?: {
     content: string;
     timestamp: string;
@@ -50,7 +51,6 @@ export default function DashboardPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilterMode>("all");
   const [canClaim, setCanClaim] = useState(false);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
-  const [adminStatus, setAdminStatus] = useState<"available" | "busy" | "offline">("offline");
   const [openChats, setOpenChats] = useState<Array<{ id: string; channelId: string; userId: string; chat: ChatUser }>>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -71,17 +71,6 @@ export default function DashboardPage() {
     });
   }, [router]);
 
-  useEffect(() => {
-    if (!session || !canClaim) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from("admin_status").upsert(
-          { user_id: user.id, status: "available", last_updated: new Date().toISOString() },
-          { onConflict: "user_id" }
-        ).then(() => setAdminStatus("available"));
-      }
-    });
-  }, [session, canClaim]);
 
   const loadChannelsAndMaybeChats = useCallback(async (options?: { nocache?: boolean }) => {
     if (!session) return;
@@ -213,19 +202,8 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchAdminStatus = async () => {
-    if (!session || !canClaim) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from("admin_status").select("status").eq("user_id", user.id).single();
-    if (data?.status) setAdminStatus(data.status as "available" | "busy" | "offline");
-  };
-
   useEffect(() => {
-    if (canClaim && session) {
-      fetchQueue();
-      fetchAdminStatus();
-    }
+    if (canClaim && session) fetchQueue();
   }, [canClaim, session]);
 
   useEffect(() => {
@@ -305,21 +283,6 @@ export default function DashboardPage() {
     fetchQueue();
   };
 
-  const handleStatusChange = async (status: "available" | "busy" | "offline") => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { error } = await supabase.from("admin_status").upsert(
-      { user_id: user.id, status, last_updated: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setAdminStatus(status);
-    toast.success(status === "available" ? "ว่าง" : status === "busy" ? "ไม่ว่าง" : "ออฟไลน์");
-  };
-
   if (!session) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -369,8 +332,6 @@ export default function DashboardPage() {
           canClaim={canClaim}
           queueItems={queueItems}
           onClaim={handleClaim}
-          adminStatus={adminStatus}
-          onStatusChange={handleStatusChange}
           notifications={
             currentUserId && canClaim ? (
               <Notifications
