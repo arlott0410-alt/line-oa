@@ -272,7 +272,7 @@ export default function DashboardPage() {
             ) : undefined
           }
         />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {openChats.length === 0 ? (
             <ChatPanel
               selectedUserId={selectedUserId}
