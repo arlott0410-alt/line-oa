@@ -1,5 +1,5 @@
--- รันไฟล์นี้ใน Supabase SQL Editor ถ้า user_roles ยังไม่มี
--- (ใช้เมื่อ migration 20260313000001 ยังไม่ได้รัน หรือรันไม่ครบ)
+-- รันไฟล์นี้ใน Supabase SQL Editor ถ้า user_roles ยังไม่มีหรือ RLS ผิดพลาด
+-- (ทางเลือก: ถ้าจะ reset ทั้งหมดให้รัน 20260322000000_drop_all_tables.sql แล้ว 20260322000001_full_schema.sql)
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

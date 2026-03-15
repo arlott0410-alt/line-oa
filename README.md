@@ -358,7 +358,7 @@ After changing Worker code, redeploy and refresh the dashboard; then send a test
 **If you get 500 errors or "Failed to load channels":**
 
 1. **Worker env vars** – In Cloudflare Dashboard → Worker → **Settings** → **Variables and Secrets**, ensure **SUPABASE_URL** and **SUPABASE_ANON_KEY** are set and match your Supabase project. After adding KV or redeploying, variables can be lost; re-add them and redeploy.
-2. **Supabase RLS** – Users must have a row in **user_roles** (e.g. `super_admin`, `admin`, or `viewer`) to read `channels`. Run the SQL in `supabase/fix_channels_1042.sql` if needed. If you see error code 1042, ensure migration `20260314000001_fix_user_roles_rls_recursion.sql` has been applied so `get_my_role()` exists.
+2. **Supabase RLS** – Users must have a row in **user_roles** (e.g. `super_admin`, `admin`, or `viewer`) to read `channels`. Run the SQL in `supabase/fix_channels_1042.sql` if needed. If you see error code 1042, ensure migration `20260322000001_full_schema.sql` has been applied so `get_my_role()` exists.
 3. **Frontend env** – In `.env.local` or Cloudflare Pages env, set **NEXT_PUBLIC_WORKER_URL** to your Worker URL (e.g. `https://your-worker.workers.dev`) so the dashboard can call `/channels` and other APIs.
 
 After fixing, use **โหลดใหม่ (ล้าง cache)** on the dashboard or open `/channels?nocache=1` to bypass cache.

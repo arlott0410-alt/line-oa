@@ -23,7 +23,7 @@ ON CONFLICT (user_id) DO UPDATE SET role = 'super_admin';
 SELECT routine_name, routine_schema
 FROM information_schema.routines
 WHERE routine_name = 'get_my_role' AND routine_schema = 'public';
--- ถ้าไม่มีแถว = ต้องรัน migration: supabase/migrations/20260314000001_fix_user_roles_rls_recursion.sql
+-- ถ้าไม่มีแถว = ต้องรัน migration: supabase/migrations/20260322000001_full_schema.sql
 
 -- 5) ตรวจว่า policy บน channels ใช้ get_my_role หรือไม่
 SELECT policyname, cmd, qual
@@ -31,7 +31,7 @@ FROM pg_policies
 WHERE tablename = 'channels';
 -- ควรเห็น policy "admin and viewer can read channels" และ qual มี get_my_role()
 
--- 6) ถ้า get_my_role ไม่มี → รัน migration ด้านล่างนี้ (หรือรันไฟล์ 20260314000001_fix_user_roles_rls_recursion.sql ทั้งไฟล์)
+-- 6) ถ้า get_my_role ไม่มี → รัน migration 20260322000001_full_schema.sql (หรือรัน full_schema ทั้งไฟล์)
 -- CREATE OR REPLACE FUNCTION public.get_my_role()
 -- RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 -- AS $$ SELECT role FROM user_roles WHERE user_id = auth.uid() LIMIT 1; $$;
